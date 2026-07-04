@@ -18,16 +18,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Debug — verify token reaches workflow
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::error::PANOPTICON_INSTANCE_TOKEN is empty — secret not reaching workflow"
-          else
-            echo "Token is set (length: ${#TOKEN})"
-          fi
-        env:
-          TOKEN: ${{ secrets.TEST_SECRET }}
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
