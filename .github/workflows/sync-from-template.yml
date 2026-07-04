@@ -26,7 +26,7 @@ jobs:
             echo "Token is set (length: ${#TOKEN})"
           fi
         env:
-          TOKEN: ${{ secrets.PANOPTICON_INSTANCE_TOKEN }}
+          TOKEN: ${{ secrets.TEST_SECRET }}
 
       - uses: actions/checkout@v4
         with:
