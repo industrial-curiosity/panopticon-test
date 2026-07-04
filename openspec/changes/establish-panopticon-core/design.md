@@ -34,7 +34,13 @@ not open questions.
 
 GitHub does not allow private forks of public repositories. The template repo is marked as a **template
 repository**, and org owners create their private instance via "Use this template". Template updates are pulled
-by adding the template as a git remote. The strategy doc's word "fork" is interpreted as "private copy".
+by adding the template as a git remote; the template repo ships `sync-from-template.yml` so instance owners
+do not have to set this up manually.
+
+"Use this template" creates a repo with no shared git history, so the first sync has no common ancestor.
+`sync-from-template.yml` detects this and resolves add/add conflicts with `-X theirs` automatically — safe
+because the instance at that point contains only files that came from the template. Subsequent syncs use the
+normal merge strategy. The strategy doc's word "fork" is interpreted as "private copy".
 
 ### D2: Index files are JSON with an explicit schema version
 
@@ -82,15 +88,18 @@ exactly what is missing — a silent skip would falsely imply the checks passed.
 ### D6: Workflows are reusable workflows referenced from the instance repo
 
 Child repos get thin caller workflows (`uses: <org>/<instance>/.github/workflows/panopticon-pr.yml@<ref>`)
-written by the init script. The ref is org-configurable at init time (branch or tag; template default is a
-pinned tag). Tooling runs by checking out the instance repo and invoking scripts directly — no pip package,
-no build step.
+written by the bootstrap installer script. The ref is org-configurable at bootstrap time (branch or tag;
+template default is a pinned tag). The bootstrap script fetches skills and workflows from the instance repo
+via the GitHub API — no local clone of the instance repo is required. CI steps run by checking out the
+instance repo and invoking scripts directly — no pip package, no build step.
 
 ### D7: Cross-repo auth is a fine-grained PAT (GitHub App later)
 
 `PANOPTICON_INSTANCE_TOKEN` is a fine-grained PAT scoped to the instance repo with `contents: read/write` and
-`issues: write`, configured as an org-level secret so all child repos inherit it. All three Panopticon secrets
-are org-level: child repos never configure per-repo secrets or env vars — their caller workflows are trivial
+`issues: write`, configured as an org-level secret so all child repos inherit it. Panopticon's CI configuration
+is split by sensitivity: **secrets** (`PANOPTICON_LLM_API_KEY`, `PANOPTICON_INSTANCE_TOKEN`) for credentials,
+and **variables** (`PANOPTICON_LLM_ENDPOINT`, `PANOPTICON_LLM_MODEL`) for non-sensitive configuration. All are
+org-level: child repos never configure per-repo secrets or variables — their caller workflows are trivial
 references to the shared workflows. A GitHub App is the cleaner long-term answer but adds setup burden; the
 token interface is a single env var either way, so swapping later is non-breaking.
 

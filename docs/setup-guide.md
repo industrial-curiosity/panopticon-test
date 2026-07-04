@@ -8,41 +8,65 @@ configure org secrets, tune gating, and initialize child repos.
 GitHub does not allow private forks of public repositories, so the instance is created from a
 **template repository**:
 
-1. On this repo's GitHub page, use **Use this template → Create a new repository** and create a
-   **private** repo in your org (e.g. `acme/panopticon-instance`). If the button is missing, a
-   template-repo owner must first enable **Settings → Template repository**.
+1. On [this repo's GitHub page](https://github.com/industrial-curiosity/panopticon-ay-eye), click
+   **Use this template → Create a new repository** and create a **private** repo in your org
+   (e.g. `acme/panopticon-instance`). If the button is missing, a template-repo owner must first
+   enable it at [**Settings → Template repository**](https://github.com/industrial-curiosity/panopticon-ay-eye/settings).
 2. The instance repo is your org's knowledge base. It will accumulate:
    - `docs/{repo}/` — a copy of each child repo's generated documentation
    - `interfaces/{repo}.json` — one interface index shard per child repo
    - `interfaces/index.json` — the compiled org-wide index (with its `conflicts` array)
    - `panopticon.config.json` — org configuration (see step 3)
-3. To pull template updates later, run the **Sync from template** workflow from
-   **Actions → Sync from template → Run workflow**. If the merge produces conflicts
+3. To pull template updates later, go to your instance repo's **Actions** tab, select
+   **Sync from template**, and click **Run workflow**. If the merge produces conflicts
    (e.g. both sides modified `panopticon.config.json`), the workflow fails with
    instructions to resolve them locally. You can also enable the weekly schedule
    in the workflow file to receive updates automatically.
-
 4. Tag the instance repo (e.g. `v1`) so child caller workflows can pin a ref (see step 3's
    `workflow_ref`).
 
-## 2. Configure org-level secrets
+## 2. Configure org-level secrets and variables
 
-All three secrets are **organization-level** Actions secrets (org **Settings → Secrets and
-variables → Actions**), granted to every repo Panopticon should cover. Child repos never
-configure per-repo secrets — their caller workflows are trivial references to the shared
-workflows.
+Go to your org's **Settings → Secrets and variables → Actions (https://github.com/organizations/YOUR-ORG/settings/secrets/actions)**
+(replace `YOUR-ORG` with your GitHub org slug) and grant each item access to:
+- the **instance repo** (created in step 1), and
+- every **child repo** Panopticon should cover.
+
+The instance repo needs access too because the Sync from template workflow runs there.
+Child repos never configure per-repo secrets or variables — their caller workflows are
+trivial references to the shared workflows.
+
+**Secrets** (encrypted; never visible in logs):
 
 | Secret | What it is |
 | --- | --- |
+| `PANOPTICON_LLM_API_KEY` | Bearer token for the LLM endpoint |
+| `PANOPTICON_INSTANCE_TOKEN` | Fine-grained PAT scoped to the instance repo — [see instructions below](#creating-panopticon_instance_token) |
+
+**Variables** (plaintext; visible in logs):
+
+| Variable | What it is |
+| --- | --- |
 | `PANOPTICON_LLM_ENDPOINT` | Base URL of any litellm-compatible (OpenAI `/chat/completions`) endpoint |
-| `PANOPTICON_LLM_API_KEY` | Bearer token for that endpoint |
-| `PANOPTICON_INSTANCE_TOKEN` | Fine-grained PAT scoped to the instance repo with **contents: read/write** and **issues: read/write** |
+| `PANOPTICON_LLM_MODEL` | Model name passed to the endpoint (defaults to `default`, which litellm proxies commonly alias) |
 
-Optionally set the org-level **variable** `PANOPTICON_LLM_MODEL` if your endpoint routes models
-by name (defaults to `default`, which litellm proxies commonly alias).
+These are consumed only by the shared CI workflows. Local flows — initialization, doc generation,
+index updates — run in each developer's own AI agent harness and need none of them.
 
-These secrets are consumed only by the shared CI workflows. Local flows — initialization, doc
-generation, index updates — run in each developer's own AI agent harness and need none of them.
+### Creating PANOPTICON_INSTANCE_TOKEN
+
+1. Go to [**New fine-grained personal access token**](https://github.com/settings/personal-access-tokens/new).
+2. Set **Resource owner** to your org (e.g. `acme`).
+3. Under **Repository access**, choose **Only select repositories** and add your **instance repo**
+   — the private repo you created in step 1 (e.g. `acme/panopticon-instance`). This is not a child
+   repo; it is the central knowledge-base repo that all child repos push into.
+4. Under **Permissions → Repository permissions**, add:
+   - **Contents** → Read and write
+   - **Issues** → Read and write
+   - *(Metadata → Read-only is added automatically by GitHub)*
+5. Set an expiration, click **Generate token**, and copy it immediately.
+6. Add the copied token as the `PANOPTICON_INSTANCE_TOKEN` org secret at
+   **Settings → Secrets and variables → Actions (https://github.com/organizations/YOUR-ORG/settings/secrets/actions)**.
 
 ## 3. Org configuration
 
@@ -70,25 +94,51 @@ generation, index updates — run in each developer's own AI agent harness and n
 
 ## 4. Initialize a child repo
 
-Initialization is a two-step dance between the developer's agent and deterministic tooling:
+Initialization has three phases: a deterministic bootstrap, an AI agent pass, and a final validation step.
 
-1. **Agent step (local, no Panopticon secrets):** in the child repo, have your AI agent follow
-   the bundled skills — `panopticon-doc-generation` for the four documentation layers and
-   `panopticon-interface-naming` / `panopticon-interface-extraction` for the local index
-   (`panopticon/index.json`). The skills live in the instance checkout under `.agents/skills/`.
-2. **Tooling step:** from the instance repo checkout, run:
+### Phase 1 — Bootstrap (from the child repo, no AI needed)
 
-   ```bash
-   python3 -m panopticon.init_repo --child ../my-service --instance acme/panopticon-instance
-   ```
+Run the bootstrap script from inside the child repo. It will prompt for your instance slug if
+`PANOPTICON_INSTANCE` is not already set:
 
-   The tooling adopts the repo's existing documentation location (or asks, defaulting to
-   `docs/`), validates the agent-produced docs and index, wires the three caller workflows, and
-   writes `panopticon/config.json` — the initialization flag — only when validation passes. It
-   also verifies the org secrets exist (report-only; missing secrets never block local init).
-   Re-running init is idempotent.
+```bash
+cd my-service
+export PANOPTICON_INSTANCE=acme/panopticon-instance
+curl -fsSL "https://raw.githubusercontent.com/acme/${PANOPTICON_INSTANCE}/main/install.py" | python3
 
-3. Commit and push the child repo changes (workflows, docs, `panopticon/` directory).
+# or call it directly and enter it again when prompted
+curl -fsSL "https://raw.githubusercontent.com/acme/acme/panopticon-instance/main/install.py" | python3
+```
+
+The script will:
+- Install the Panopticon skills into `.agents/skills/`
+- Wire the three caller GitHub Actions workflows into `.github/workflows/`
+- Check that org secrets and variables are configured (report-only — nothing is blocked)
+- Print the exact prompts to give your AI agent in Phase 2
+
+### Phase 2 — Agent (follow the printed prompts)
+
+Copy the prompts the bootstrap script printed and give them to your AI agent (Claude Code, Cursor,
+or any harness that loads skills from `.agents/skills/`). The agent will:
+1. Generate the four-layer documentation using the `panopticon-doc-generation` skill
+2. Build the local interface index (`panopticon/index.json`) using the
+   `panopticon-interface-naming` and `panopticon-interface-extraction` skills
+
+No `PANOPTICON_LLM_*` secrets or variables are needed locally — the agent uses its own harness.
+
+### Phase 3 — Finalize
+
+The final prompt from the bootstrap output will instruct your agent to run the finalization step,
+which validates the agent-produced docs and index and writes `panopticon/config.json` — the
+initialization flag — only once validation passes.
+
+### Commit and push
+
+```bash
+git add .github/workflows/ .agents/skills/ docs/ panopticon/
+git commit -m "chore: initialize Panopticon"
+git push
+```
 
 ## 5. What runs afterwards
 
