@@ -30,7 +30,15 @@
     ],
     "inventory-api": [
       {
-        "consumer": [],
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/services.yaml"
+            ]
+          }
+        ],
         "owner": {
           "component": "api",
           "repo": "panopticon-test-child-a"
@@ -75,6 +83,33 @@
         "type": "s3"
       }
     ],
+    "order-attachments-bucket": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/s3-buckets.yaml"
+            ]
+          }
+        ],
+        "owner": {
+          "component": "storage",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/s3-buckets.yaml"
+            ]
+          }
+        ],
+        "type": "s3"
+      }
+    ],
     "order-events": [
       {
         "consumer": [
@@ -86,9 +121,46 @@
             ]
           }
         ],
-        "owner": null,
-        "producer": [],
+        "owner": {
+          "component": "panopticon-test-child-b",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/events/kafka-topics.yaml"
+            ]
+          }
+        ],
         "type": "kafka"
+      }
+    ],
+    "order-processing-queue": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/sqs-queues.yaml"
+            ]
+          }
+        ],
+        "owner": {
+          "component": "worker",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/sqs-queues.yaml"
+            ]
+          }
+        ],
+        "type": "sqs"
       }
     ],
     "orders-api": [
@@ -102,8 +174,18 @@
             ]
           }
         ],
-        "owner": null,
-        "producer": [],
+        "owner": {
+          "component": "panopticon-test-child-b",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/api/openapi.yaml"
+            ]
+          }
+        ],
         "type": "rest"
       }
     ],
@@ -121,6 +203,38 @@
         "owner": null,
         "producer": [],
         "type": "database"
+      }
+    ],
+    "shipping-provider-api": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/services.yaml"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
+      }
+    ],
+    "stripe-payments": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "infra/services.yaml"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
       }
     ],
     "warehouse-erp": [
