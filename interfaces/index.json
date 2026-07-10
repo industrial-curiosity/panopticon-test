@@ -1,0 +1,144 @@
+{
+  "conflicts": [],
+  "interfaces": {
+    "fulfillment-queue": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/queue/fulfillment_queue.py"
+            ]
+          }
+        ],
+        "owner": {
+          "component": "queue",
+          "repo": "panopticon-test-child-a"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/queue/fulfillment_queue.py"
+            ]
+          }
+        ],
+        "type": "sqs"
+      }
+    ],
+    "inventory-api": [
+      {
+        "consumer": [],
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-a"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/api/openapi.yaml",
+              "inventory/api/routes.py"
+            ]
+          }
+        ],
+        "type": "rest"
+      }
+    ],
+    "inventory-snapshots": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/storage/snapshots.py"
+            ]
+          }
+        ],
+        "owner": {
+          "component": "storage",
+          "repo": "panopticon-test-child-a"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/storage/snapshots.py"
+            ]
+          }
+        ],
+        "type": "s3"
+      }
+    ],
+    "order-events": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/events/kafka_consumer.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "kafka"
+      }
+    ],
+    "orders-api": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/orders.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
+      }
+    ],
+    "product-catalog-db": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/db/catalog.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "database"
+      }
+    ],
+    "warehouse-erp": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/erp.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
+      }
+    ]
+  },
+  "schema_version": 1
+}
