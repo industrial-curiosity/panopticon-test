@@ -88,6 +88,22 @@
         "type": "kafka"
       }
     ],
+    "order-processing-queue": [
+      {
+        "consumer": [
+          {
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/order_processing.py"
+            ]
+          }
+        ],
+        "extracted_by": "llm",
+        "owner": null,
+        "producer": [],
+        "type": "rest"
+      }
+    ],
     "orders-api": [
       {
         "consumer": [
@@ -99,8 +115,18 @@
           }
         ],
         "extracted_by": "llm",
-        "owner": null,
-        "producer": [],
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-a"
+        },
+        "producer": [
+          {
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/api/orders_routes.py"
+            ]
+          }
+        ],
         "type": "rest"
       }
     ],

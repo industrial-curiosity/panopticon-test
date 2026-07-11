@@ -1,5 +1,28 @@
 {
-  "conflicts": [],
+  "conflicts": [
+    {
+      "claims": [
+        {
+          "claimed_by": "panopticon-test-child-a",
+          "owner": {
+            "component": "api",
+            "repo": "panopticon-test-child-a"
+          }
+        },
+        {
+          "claimed_by": "panopticon-test-child-b",
+          "owner": {
+            "component": "panopticon-test-child-b",
+            "repo": "panopticon-test-child-b"
+          }
+        }
+      ],
+      "details": "repos ['panopticon-test-child-a', 'panopticon-test-child-b'] each claim ownership of 'orders-api' (rest)",
+      "name": "orders-api",
+      "reason": "ownership-dispute",
+      "type": "rest"
+    }
+  ],
   "interfaces": {
     "fulfillment-queue": [
       {
@@ -141,6 +164,20 @@
         "consumer": [
           {
             "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/order_processing.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
+      },
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
               "infra/sqs-queues.yaml"
@@ -174,11 +211,15 @@
             ]
           }
         ],
-        "owner": {
-          "component": "panopticon-test-child-b",
-          "repo": "panopticon-test-child-b"
-        },
+        "owner": null,
         "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/api/orders_routes.py"
+            ]
+          },
           {
             "repo": "panopticon-test-child-b",
             "source_files": [

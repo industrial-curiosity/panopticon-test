@@ -29,10 +29,17 @@
 - **Provenance:** extracted by LLM (no deterministic parser yet)
 - **Consumed by this repo via:** `inventory/events/kafka_consumer.py`
 
-## `orders-api` (rest)
+## `order-processing-queue` (rest)
 
 - **Owner:** unknown or manually created infrastructure
 - **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Consumed by this repo via:** `inventory/clients/order_processing.py`
+
+## `orders-api` (rest)
+
+- **Owner:** panopticon-test-child-a / api (this repo)
+- **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Produced by this repo via:** `inventory/api/orders_routes.py`
 - **Consumed by this repo via:** `inventory/clients/orders.py`
 
 ## `product-catalog-db` (database)
