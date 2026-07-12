@@ -15,10 +15,9 @@ this repo currently (see [architecture.md](../architecture.md#data-flow)).
   ownership dispute, not a resolved handoff. See [interfaces.md](../interfaces.md#orders-api).
 - **`warehouse-erp`** (`rest`) — consumed here; owned externally (third-party on-premise ERP,
   no org repo owner). See [interfaces.md](../interfaces.md#warehouse-erp).
-- **`order-processing-queue`** (`rest`) — consumed here; owned externally, name unresolved (this
-  repo's `rest` declaration for `order-processing-queue` conflicts with another org repo's `sqs`
-  declaration of the same name — a real naming collision, not yet reconciled). See
-  [interfaces.md](../interfaces.md#order-processing-queue).
+- **`order-processing-queue`** (`rest`) — consumed here; owned externally, name unresolved (no
+  owner recorded in this repo's index; this repo has no visibility into other repos' declarations).
+  See [interfaces.md](../interfaces.md#order-processing-queue).
 
 ## Key modules
 

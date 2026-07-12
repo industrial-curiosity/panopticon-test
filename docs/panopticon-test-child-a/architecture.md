@@ -19,6 +19,41 @@ clients, event consumption, async task queueing, snapshot storage, and product c
 - [storage](components/storage.md) — S3 client for daily inventory snapshots
 - [db](components/db.md) — PostgreSQL access to the product catalog
 
+## Architecture diagram
+
+```mermaid
+graph LR
+    subgraph repo["panopticon-test-child-a"]
+        api["api"]
+        clients["clients"]
+        events["events"]
+        queue["queue"]
+        storage["storage"]
+        db["db"]
+    end
+
+    inventory_api(("inventory-api (REST)"))
+    orders_api(("orders-api (REST)"))
+    warehouse_erp(("warehouse-erp (REST)"))
+    order_processing(("order-processing-queue (REST)"))
+    order_events(("order-events (Kafka)"))
+    fulfillment_queue(("fulfillment-queue (SQS)"))
+    inventory_snapshots(("inventory-snapshots (S3)"))
+    product_catalog_db(("product-catalog-db (DB)"))
+
+    api -->|produces| inventory_api
+    api -->|produces, disputed| orders_api
+    clients -->|consumes| orders_api
+    clients -->|consumes| warehouse_erp
+    clients -->|consumes| order_processing
+    events -->|consumes| order_events
+    queue -->|produces & consumes| fulfillment_queue
+    storage -->|produces & consumes| inventory_snapshots
+    db -->|consumes| product_catalog_db
+```
+
+[org diagram](../architecture.md#panopticon-test-child-a)
+
 ## Data flow
 
 As implemented today, these components are **not wired to one another** — each is a standalone
@@ -59,9 +94,8 @@ See [interfaces.md](interfaces.md) for the full interface list with ownership an
 - **`product-catalog-db`** (database, external, managed RDS instance) — product metadata;
   unavailability blocks `inventory/db/catalog.py` callers.
 - **`order-processing-queue`** (REST, external, owner unresolved) — order-processing status
-  lookups from `inventory/clients/order_processing.py`. This repo declares it `rest`; another org
-  repo declares an `sqs` interface under the same canonical name — an unreconciled naming
-  collision, not a shared contract.
+  lookups from `inventory/clients/order_processing.py`. No owner is recorded in this repo's
+  index; this repo has no visibility into whether another repo declares this name differently.
 
 Full details, ownership, and consumers/producers for every interface: see
 [interfaces.md](interfaces.md).
