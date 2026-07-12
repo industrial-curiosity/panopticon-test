@@ -87,7 +87,8 @@ stopgaps.
   validation (`docs.py`), doc-drift, index-currency, diagram-existence, and tooling-currency checks (`drift.py`,
   `currency.py`, `diagram_check.py`, `tooling_currency.py` — the last always advisory, never gated), deterministic
   org-wide diagram rendering (`diagrams.py`), org/repo/diagram config and the protected-config registries
-  (`config.py`), child-repo init (`init_repo.py`), and the on-demand local sync script (`sync.py`)
+  (`config.py`), child-repo init (`init_repo.py`), the on-demand local sync script (`sync.py`), and the
+  org-diagram link script (`org_diagram_link.py`)
 - `.github/workflows/` — the reusable workflows child repos call: `panopticon-pr.yml`, `panopticon-merge.yml`,
   `panopticon-pr-close.yml`; plus `sync-from-template.yml`, run from instance repos to pull template updates
 - `interfaces/` — index shards + compiled index (empty in the template; populated in instance repos)
@@ -97,6 +98,8 @@ stopgaps.
   printed to the sync run's step summary instead)
 - `panopticon.diagram.config.json` *(instance repos only)* — diagram rendering format (default `mermaid`);
   protected from `sync-from-template`'s merge via `.gitattributes`
+- `PANOPTICON.md` — a concise, static getting-started guide, downloaded verbatim into every child repo's
+  root by the bootstrap script (identical across child repos of a given instance; not per-repo templated)
 - `tests/` — `unittest` suite ([how to run](docs/testing.md))
 - `docs/` — [org-owner setup guide](docs/setup-guide.md), [parser contribution guide](docs/parser-contribution.md),
   [testing](docs/testing.md), and project strategy documents

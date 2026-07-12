@@ -140,9 +140,12 @@ Once a location is chosen, the script will:
 - Vendor the local-tooling subset of the `panopticon` Python package into `panopticon/`, so the
   `python3 -m panopticon...` commands the skills use in Phase 2 work immediately — no need to clone the
   instance repo or set up a Python environment yourself
+- Download `PANOPTICON.md` to the repo root — a concise getting-started guide (how the system works,
+  where architecture diagrams live, and how to keep this repo's skills/tooling current)
 - Wire the three caller GitHub Actions workflows into `.github/workflows/`
 - Check that org secrets and variables are configured (report-only — nothing is blocked)
-- Print the one prompt to give your AI agent in Phase 2
+- Print a reminder of `PANOPTICON.md` and the `python3 -m panopticon.sync` command (every run, not
+  just the first), then the one prompt to give your AI agent in Phase 2
 
 ### Phase 2 — Agent (follow the printed prompt)
 
@@ -192,6 +195,11 @@ the template adds or removes a config field you haven't picked up.
 
 ## 6. Keeping a child repo's skills and tooling current
 
+Every child repo gets a `PANOPTICON.md` at its root from the bootstrap script (Phase 1) — a concise
+version of this section, so a maintainer working in that repo doesn't need this setup guide open to
+remember how to stay current. The bootstrap script also reprints the sync command below on every
+run, first bootstrap and re-run alike.
+
 A child repo's downloaded skills, vendored `panopticon/` tooling, and wired workflow ref are all
 snapshots taken at bootstrap time. Nothing forces them to stay current — the **tooling-currency
 check** (every PR, see above) warns, non-blocking, when any of the three has drifted from the
@@ -220,3 +228,20 @@ upstream template, declare it in the instance's `panopticon.config.json` under `
 (step 3) — `sync.py` does not consult `protected_paths` itself (it always overwrites the child
 unconditionally by design); `protected_paths` only protects the *instance* repo's own copy from the
 *template*.
+
+## 7. Finding the org-wide architecture diagram from a child repo
+
+A child repo's own `## Architecture diagram` section links back to the org diagram, but that link is
+relative and only resolves once this repo's docs have been merged into the instance repo (see the
+architecture-diagrams capability) — it won't work if you click it before then. For an immediately
+clickable link, from your own checkout, before any merge:
+
+```bash
+python3 -m panopticon.org_diagram_link
+```
+
+This prints a single resolvable URL, e.g. `https://github.com/acme/panopticon-instance/blob/main/docs/architecture.md#svc-a`,
+reading only local config — no network call, no instance repo clone. It requires `panopticon/config.json`'s
+`instance_default_branch` field, resolved automatically during Phase 3 finalization (via the `gh`
+CLI); if that field is missing (e.g. `gh` wasn't installed/authenticated when you finalized), re-run
+`python3 -m panopticon.init_repo` with `gh` available to populate it.

@@ -219,12 +219,17 @@ def download_skills(owner, repo, ref, tree, token=None, child_root=".", dest_loc
 # The exact transitive import closure of `python3 -m panopticon.init_repo` and the
 # `python3 -m panopticon.docs` commands panopticon-doc-generation/SKILL.md invokes directly, plus
 # `sync.py` (tooling-currency capability) so an already-bootstrapped child repo can pull the
-# instance's current skills/tooling on demand via `python3 -m panopticon.sync` — confirmed by
-# reading each module's imports. All stdlib-only. Everything else in panopticon/ (llm.py, drift.py,
-# currency.py, merge.py, extraction.py, skills.py, bootstrap.py, tooling_currency.py, parsers/) is
-# used only by the reusable GitHub Actions workflows that check out the instance repo directly,
-# and has no role in local Phase 2/3 work — it SHALL NOT be vendored into child repos.
-LOCAL_TOOLING_MODULES = ("__init__.py", "config.py", "docs.py", "index.py", "init_repo.py", "sync.py")
+# instance's current skills/tooling on demand via `python3 -m panopticon.sync`, and
+# `org_diagram_link.py` (architecture-diagrams capability) so a developer can print a resolvable
+# link to the org diagram via `python3 -m panopticon.org_diagram_link` — confirmed by reading each
+# module's imports. All stdlib-only. Everything else in panopticon/ (llm.py, drift.py, currency.py,
+# merge.py, extraction.py, skills.py, bootstrap.py, tooling_currency.py, parsers/) is used only by
+# the reusable GitHub Actions workflows that check out the instance repo directly, and has no role
+# in local Phase 2/3 work — it SHALL NOT be vendored into child repos.
+LOCAL_TOOLING_MODULES = (
+    "__init__.py", "config.py", "docs.py", "index.py", "init_repo.py", "sync.py",
+    "org_diagram_link.py",
+)
 
 
 def download_local_tooling(owner, repo, ref, token=None, child_root=".",
@@ -240,6 +245,21 @@ def download_local_tooling(owner, repo, ref, token=None, child_root=".",
         (dest_dir / name).write_bytes(content)
         print(f"  [{i}/{total}] {name}")
     return total
+
+# ── Getting-started guide ────────────────────────────────────────────────────────
+# A single, concise, static, template-authored file (tooling-currency capability) — identical
+# across every child repo of a given instance, downloaded verbatim like skills/tooling (never
+# per-repo generated). Placed at the child repo's root for maximum visibility.
+GETTING_STARTED_GUIDE = "PANOPTICON.md"
+
+
+def download_getting_started_guide(owner, repo, ref, token=None, child_root=".",
+                                    urlopen=urllib.request.urlopen):
+    """Download GETTING_STARTED_GUIDE from the instance repo's root to the child repo's root.
+    Idempotent: overwrites in place, same trust model as skills/tooling."""
+    content = _fetch_file_bytes(owner, repo, GETTING_STARTED_GUIDE, ref, token, urlopen)
+    (Path(child_root) / GETTING_STARTED_GUIDE).write_bytes(content)
+    return GETTING_STARTED_GUIDE
 
 # ── Prerequisite check ────────────────────────────────────────────────────────
 
@@ -509,6 +529,22 @@ Then commit and push:
   git push
 """
 
+
+def sync_reminder():
+    """Return the printed reminder naming GETTING_STARTED_GUIDE and the sync command (tooling-
+    currency capability: "Bootstrap output references the sync workflow and getting-started
+    guide"). Printed on every run, first bootstrap and idempotent re-run alike — distinct from
+    agent_prompts()'s one-time-per-init AI-agent prompt, so a maintainer re-running the script just
+    to pick up a tooling-currency fix still sees it."""
+    return f"""\
+
+Keeping this repo current:
+  See {GETTING_STARTED_GUIDE} for how this repo fits into your org's Panopticon setup.
+  Pull the instance's current skills and tooling any time with:
+    python3 -m panopticon.sync
+    python3 -m panopticon.sync --check-updates   # preview only, writes nothing
+"""
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(env=None, child_root=".", prompt_fn=None, urlopen=urllib.request.urlopen):
@@ -564,6 +600,15 @@ def main(env=None, child_root=".", prompt_fn=None, urlopen=urllib.request.urlope
         print(f"  error: {exc}")
         return 1
 
+    # Download the getting-started guide (tooling-currency capability).
+    print("\nDownloading getting-started guide...")
+    try:
+        download_getting_started_guide(owner, repo, default_branch, token, child_root, urlopen)
+        print(f"  {GETTING_STARTED_GUIDE} installed")
+    except RuntimeError as exc:
+        print(f"  error: {exc}")
+        return 1
+
     # Wire workflows.
     print("\nWiring GitHub Actions workflows...")
     wire_workflows(instance, ref, child_root, default_branch)
@@ -585,5 +630,6 @@ def main(env=None, child_root=".", prompt_fn=None, urlopen=urllib.request.urlope
     else:
         print("  All org-level secrets and variables are configured.")
 
+    print(sync_reminder())
     print(agent_prompts())
     return 0

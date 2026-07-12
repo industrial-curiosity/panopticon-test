@@ -1,11 +1,216 @@
+## ADDED Requirements
+
+### Requirement: Getting-started guide vendored into child repo
+
+The bootstrap script SHALL download a single, concise getting-started guide from the instance repo and
+write it to the child repo's root as `PANOPTICON.md`, so a maintainer opening the repo sees it
+immediately without navigating into `docs/` or `.agents/skills/`. The guide's content SHALL be static and
+template-authored — downloaded verbatim, identical across every child repo of a given instance, never
+per-repo generated or agent-written — mirroring how skills and vendored tooling modules are downloaded
+as-is rather than templated. Re-running the bootstrap script SHALL overwrite `PANOPTICON.md` in place,
+the same idempotent-overwrite trust model already used for skills and vendored tooling.
+
+The guide SHALL, at minimum, describe: (1) the three repo roles (template, instance, child) and the
+pull-request/merge lifecycle in brief, so a new maintainer has the same orientation the setup guide gives
+an org owner; (2) where architecture diagrams live — this repo's own `## Architecture diagram` section
+in its `architecture.md`, and the org-wide diagram at the instance repo's `docs/architecture.md`; and
+(3) exactly how to keep this repo's skills and vendored tooling current — the literal
+`python3 -m panopticon.sync` and `python3 -m panopticon.sync --check-updates` commands (tooling-currency
+capability).
+
+#### Scenario: Getting-started guide is downloaded on first bootstrap
+
+- **WHEN** the bootstrap script runs in a child repo for the first time
+- **THEN** the child repo's root contains `PANOPTICON.md`, downloaded from the instance repo
+
+#### Scenario: Getting-started guide is refreshed on re-run
+
+- **WHEN** the bootstrap script runs again on an already-bootstrapped repo
+- **THEN** `PANOPTICON.md` is overwritten in place with the instance repo's current content, and no
+  duplicate file is created
+
+#### Scenario: Guide documents the sync command
+
+- **WHEN** a maintainer reads `PANOPTICON.md`
+- **THEN** it contains the literal command `python3 -m panopticon.sync` and explains that it pulls the
+  instance repo's current skills and vendored tooling into this repo
+
+#### Scenario: Guide points to both diagram locations
+
+- **WHEN** a maintainer reads `PANOPTICON.md` looking for architecture diagrams
+- **THEN** it names both this repo's own `## Architecture diagram` section and the instance repo's
+  org-wide `docs/architecture.md`
+
+### Requirement: Bootstrap output references the sync workflow and getting-started guide
+
+The bootstrap script's printed output SHALL, on every run — first bootstrap and idempotent re-run
+alike — explicitly name `PANOPTICON.md`'s location and the literal `python3 -m panopticon.sync` command
+(including its `--check-updates` dry-run flag), so a maintainer discovers the sync workflow directly from
+the terminal output without first having to know `PANOPTICON.md` exists or read source code. This output
+is distinct from the `/panopticon-init` agent prompt (see "Agent prompts output") — it SHALL be present
+regardless of whether that prompt is also printed.
+
+#### Scenario: First run prints the sync command and guide location
+
+- **WHEN** the bootstrap script completes a first-time run
+- **THEN** its output contains both `PANOPTICON.md` and the literal text `python3 -m panopticon.sync`
+
+#### Scenario: Re-run also prints the sync command and guide location
+
+- **WHEN** the bootstrap script is run again on an already-bootstrapped repo
+- **THEN** its output still contains both `PANOPTICON.md` and `python3 -m panopticon.sync` — this is not
+  gated behind "first run only", since a maintainer re-running the script specifically to pick up a
+  tooling-currency fix needs to see it every time
+
+### Requirement: Recorded instance_default_branch is resolved deterministically, never guessed
+
+The finalization step SHALL resolve `instance_default_branch` by querying the instance repo's actual
+default branch via the GitHub API at finalization time, and SHALL NOT hardcode `"main"`, derive it from
+`workflow_ref`, or otherwise guess it. `workflow_ref` MAY reference an org-pinned tag or branch chosen
+independently of the instance repo's actual default branch (see "Default workflow ref requires no manual
+instance setup"), so conflating the two would silently produce a wrong value for anything built from
+`instance_default_branch` (the tooling-currency capability's org-diagram link script). This mirrors
+"Recorded workflow_ref matches the wired caller workflows"'s never-guess discipline, applied to this
+second, independently-resolved field on the same config file.
+
+#### Scenario: Instance's default branch is recorded as-is
+
+- **GIVEN** the instance repo's actual default branch is `main`
+- **WHEN** the finalization step runs and writes `panopticon/config.json`
+- **THEN** the `instance_default_branch` field is `main`
+
+#### Scenario: Non-standard default branch name is recorded, not overridden
+
+- **GIVEN** the instance repo's actual default branch is `trunk`
+- **WHEN** the finalization step runs and writes `panopticon/config.json`
+- **THEN** the `instance_default_branch` field is `trunk`, not `main`
+
+#### Scenario: workflow_ref and instance_default_branch are resolved independently
+
+- **GIVEN** the org has pinned `workflow_ref` to `v2` in `panopticon.config.json`, and the instance
+  repo's actual default branch is `main`
+- **WHEN** the finalization step runs and writes `panopticon/config.json`
+- **THEN** `workflow_ref` is `v2` and `instance_default_branch` is `main` — the two fields are never
+  conflated or derived from one another
+
 ## MODIFIED Requirements
 
-### Requirement: Template update workflow
+### Requirement: Initialization finalization
 
-> Note: this requirement's baseline already reflects the `architecture-diagrams` change's
-> protected-config mechanism (points 5–6 below), which is implemented and complete but not yet
-> archived into `openspec/specs/` at the time this delta was written. This delta's full content
-> below is accurate to the actual current behavior of `sync-from-template.yml`.
+A finalization command, distinct from the bootstrap script, SHALL validate the agent-produced
+documentation and index and write `panopticon/config.json` only when validation passes. It SHALL read
+the documentation location from the child repo (adopting an existing docs folder or using the default
+`docs/`), record it in the config along with `instance_default_branch` (see "Recorded
+instance_default_branch is resolved deterministically, never guessed"), and verify org-level CI
+prerequisites (report-only). The finalization step SHALL be idempotent: re-running it updates the config
+in place.
+
+#### Scenario: Validation passes
+
+- **WHEN** all four documentation layers are present and the local index is schema-valid
+- **THEN** `panopticon/config.json` is written with `repo`, `instance`, `workflow_ref`, `docs_location`,
+  and `instance_default_branch` fields
+
+#### Scenario: Re-finalization after a docs update
+
+- **WHEN** the finalization step is run again on an already-initialized repo
+- **THEN** `panopticon/config.json` is updated in place and no duplicate files are created
+
+### Requirement: Bootstrap installer script
+
+The template repo SHALL include a Python bootstrap script that can be run directly from a child repo
+without cloning the instance repo locally, invoked via:
+
+```
+curl -fsSL https://raw.githubusercontent.com/<instance>/main/install.py | python3
+```
+
+or equivalently by downloading and running it. The script SHALL read the instance org/repo slug from the
+`PANOPTICON_INSTANCE` environment variable, falling back to an interactive prompt when the variable is not
+set and stdin is a terminal. Using only Python stdlib and the GitHub API (no additional dependencies), the
+script SHALL:
+
+1. Determine the child repo's skills location (see "Skills location selection") — this SHALL happen
+   before any skill files are downloaded.
+2. Download only skills whose directory name begins with `panopticon-` from the instance repo's
+   `.agents/skills/` directory and write them to the chosen skills location in the child repo, creating
+   the directory if absent. Skills at other name prefixes (org-internal skills, tooling skills, etc.)
+   SHALL NOT be written to the child repo.
+3. Download the local-tooling subset of the `panopticon` Python package into the child repo's
+   `panopticon/` directory (see "Local tooling package vendored into child repo").
+4. Download the getting-started guide from the instance repo and write it to the child repo's root as
+   `PANOPTICON.md` (see "Getting-started guide vendored into child repo").
+5. Download the three caller workflow files from the instance repo and write them to the child repo's
+   `.github/workflows/`, creating the directory if absent.
+6. Verify org-level CI prerequisites (secrets and variables) and report any missing items — report-only,
+   never blocking.
+7. Output the exact prompts the user shall give their AI agent to complete the AI-dependent initialization
+   steps (see "Agent prompts output"), and the sync-workflow reference (see "Bootstrap output references
+   the sync workflow and getting-started guide").
+
+The bootstrap script SHALL NOT write `panopticon/config.json`. The config file is the last artifact
+created, by the finalization step after the agent has completed its work.
+
+#### Self-bootstrapping when piped via curl
+
+When `install.py` is piped from the instance repo via `curl | python3`, it runs outside the instance repo
+directory and cannot import the `panopticon` package locally. The script SHALL detect this condition
+(import failure at startup) and self-bootstrap by downloading `panopticon/__init__.py` and
+`panopticon/bootstrap.py` from the instance repo via the GitHub API, installing them into `sys.modules`
+in-process, then continuing with the normal import flow — without requiring any local clone of the
+instance repo.
+
+Token discovery for GitHub API calls SHALL follow the same precedence used by bootstrap.py: `GH_TOKEN`
+env var, then `GITHUB_TOKEN` env var, then `gh auth token` if the `gh` CLI is available. When no token is
+found the API call is made unauthenticated (suitable for public instance repos; private repos will receive
+a 404 and the script SHALL exit with a clear error).
+
+#### Scenario: Only panopticon-prefixed skills are installed
+
+- **GIVEN** the instance repo's `.agents/skills/` contains both `panopticon-doc-generation/` and
+  `openspec-apply-change/` (an org-internal skill), and the chosen skills location is `.agents/skills/`
+  (the default)
+- **WHEN** the bootstrap script runs
+- **THEN** `.agents/skills/panopticon-doc-generation/` is written to the child repo and
+  `.agents/skills/openspec-apply-change/` is not
+
+#### Scenario: First run in an uninitialised repo
+
+- **WHEN** the bootstrap script runs in a child repo with `PANOPTICON_INSTANCE=acme/panopticon-instance`
+  set (or entered at the prompt), and the skills location prompt is accepted at its `.agents/skills/`
+  default
+- **THEN** the child repo's `.agents/skills/` contains the instance skills, `.github/workflows/` contains
+  the three Panopticon caller workflows, the repo root contains `PANOPTICON.md`, and the terminal prints
+  the `/panopticon-init` prompt — without creating `panopticon/config.json`
+
+#### Scenario: Piped curl execution with panopticon package unavailable
+
+- **GIVEN** the user runs `curl -fsSL https://raw.githubusercontent.com/<instance>/main/install.py | python3`
+  from a child repo that does not contain the `panopticon` package
+- **WHEN** the initial import of `panopticon.bootstrap` fails with `ModuleNotFoundError`
+- **THEN** the script downloads `panopticon/__init__.py` and `panopticon/bootstrap.py` from the instance
+  repo, installs them in-process, and proceeds identically to a local run with no error surfaced to the
+  user
+
+#### Scenario: Piped curl execution with PANOPTICON_INSTANCE unset
+
+- **GIVEN** the user pipes `install.py` via curl without setting `PANOPTICON_INSTANCE`
+- **WHEN** stdin is not a terminal (no interactive prompt possible)
+- **THEN** the script exits with a non-zero code and a message that names the missing env var and shows
+  the correct export-and-pipe command
+
+#### Scenario: Instance slug not configured in interactive mode
+
+- **WHEN** the bootstrap script runs with no `PANOPTICON_INSTANCE` env var and stdin is a terminal
+- **THEN** the script prompts for the slug and proceeds using the entered value, identical to supplying
+  the env var
+
+#### Scenario: Re-run on an already-bootstrapped repo
+
+- **WHEN** the bootstrap script is run again on a repo whose skills and workflows are already installed
+- **THEN** all files are updated in place and nothing is duplicated
+
+### Requirement: Template update workflow
 
 The template repo SHALL ship a `sync-from-template.yml` workflow that instance repo owners can trigger
 manually to pull upstream template changes. The workflow SHALL:
@@ -46,6 +251,11 @@ DO exist in the template (each with a template-shipped default), which is exactl
 protection rather than relying on case 2's "doesn't exist upstream" reasoning. Org-declared paths (cases
 7–8) may or may not exist in the template — the mechanism protects them either way, since the org, not
 the template, decides what belongs in `protected_paths`.
+
+> Note: this requirement's baseline already reflects the `architecture-diagrams` change's
+> protected-config mechanism (points 5–6 above), which is implemented and complete but not yet
+> archived into `openspec/specs/` at the time this delta was written. This delta's full content
+> above is accurate to the actual current behavior of `sync-from-template.yml`.
 
 #### Scenario: First-time sync after "Use this template"
 
@@ -96,16 +306,19 @@ The bootstrap script SHALL download the local-tooling subset of the `panopticon`
 the modules that Phase 2 skills and the Phase 3 finalization command invoke directly
 (`__init__.py`, `config.py`, `docs.py`, `index.py`, `init_repo.py`), plus the local sync script
 (tooling-currency capability) that lets an already-initialized repo pull the instance's current
-skills and tooling on demand — from the instance repo and write them to the child repo's
-`panopticon/` directory, creating it if absent, so `python3 -m panopticon.docs`,
-`python3 -m panopticon.init_repo`, and `python3 -m panopticon.sync` are all runnable immediately
-after Phase 1 with no manual setup: no cloning the instance repo, no `PYTHONPATH` configuration, no
-other local Python environment step.
+skills and tooling on demand, plus the org-diagram link script (architecture-diagrams capability,
+"Org-diagram link script") that prints a resolvable link to this repo's section of the org diagram —
+from the instance repo and write them to the child repo's `panopticon/` directory, creating it if
+absent, so `python3 -m panopticon.docs`, `python3 -m panopticon.init_repo`,
+`python3 -m panopticon.sync`, and `python3 -m panopticon.org_diagram_link` are all runnable
+immediately after Phase 1 with no manual setup: no cloning the instance repo, no `PYTHONPATH`
+configuration, no other local Python environment step.
 
 Modules used only by the reusable GitHub Actions workflows that check out the instance repo directly
 (`llm.py`, `drift.py`, `currency.py`, `merge.py`, `extraction.py`, `skills.py`, `bootstrap.py`, `diagrams.py`,
-`diagram_check.py`, and the `parsers/` package) SHALL NOT be written to the child repo — they have no role
-in local Phase 2/3 work and bootstrap.py's own comment already documents this CI-only split.
+`diagram_check.py`, `tooling_currency.py`, and the `parsers/` package) SHALL NOT be written to the child
+repo — they have no role in local Phase 2/3 work and bootstrap.py's own comment already documents this
+CI-only split.
 
 Because the vendored subset and the instance repo's full package share the same `panopticon` package
 name, any CI workflow step that checks out both the child repo (as its working directory) and the
@@ -128,17 +341,26 @@ ordering alone to win this resolution, since `python3 -m`/`-c` prepend the curre
 - **WHEN** the user runs `python3 -m panopticon.sync --check-updates`
 - **THEN** the command runs successfully with no instance repo clone or `PYTHONPATH` configuration
 
+#### Scenario: The org-diagram link script is usable immediately after bootstrap and initialization
+
+- **GIVEN** a freshly bootstrapped and initialized child repo (so `panopticon/config.json` exists with
+  `instance`, `instance_default_branch`, and `repo` populated)
+- **WHEN** the user runs `python3 -m panopticon.org_diagram_link`
+- **THEN** the command runs successfully with no instance repo clone, no `PYTHONPATH` configuration, and
+  no network call
+
 #### Scenario: CI-only modules are excluded
 
 - **WHEN** the bootstrap script vendors the local-tooling subset
 - **THEN** the child repo's `panopticon/` directory contains `__init__.py`, `config.py`, `docs.py`,
-  `index.py`, `init_repo.py`, and `sync.py`, and none of `llm.py`, `drift.py`, `currency.py`, `merge.py`,
-  `extraction.py`, `skills.py`, `bootstrap.py`, `diagrams.py`, `diagram_check.py`, or `parsers/`
+  `index.py`, `init_repo.py`, `sync.py`, and `org_diagram_link.py`, and none of `llm.py`, `drift.py`,
+  `currency.py`, `merge.py`, `extraction.py`, `skills.py`, `bootstrap.py`, `diagrams.py`,
+  `diagram_check.py`, `tooling_currency.py`, or `parsers/`
 
 #### Scenario: Re-run refreshes vendored modules in place
 
 - **WHEN** the bootstrap script runs again on a repo that already has the vendored `panopticon/` modules
-- **THEN** each of the six files is overwritten in place with the instance repo's current content, and
+- **THEN** each of the seven files is overwritten in place with the instance repo's current content, and
   no duplicate files are created
 
 #### Scenario: CI resolves instance-only modules despite child vendoring
