@@ -12,7 +12,7 @@
         {
           "claimed_by": "panopticon-test-child-b",
           "owner": {
-            "component": "panopticon-test-child-b",
+            "component": "api",
             "repo": "panopticon-test-child-b"
           }
         }
@@ -58,7 +58,8 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/inventory.ts"
             ]
           }
         ],
@@ -113,7 +114,8 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml"
+              "infra/s3-buckets.yaml",
+              "src/storage/attachments.ts"
             ]
           }
         ],
@@ -126,7 +128,8 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml"
+              "infra/s3-buckets.yaml",
+              "src/storage/attachments.ts"
             ]
           }
         ],
@@ -145,14 +148,16 @@
           }
         ],
         "owner": {
-          "component": "panopticon-test-child-b",
+          "component": "events",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
           {
+            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "src/events/kafka-topics.yaml"
+              "src/events/kafka-topics.yaml",
+              "src/events/producer.ts"
             ]
           }
         ],
@@ -180,7 +185,9 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml"
+              "infra/sqs-queues.yaml",
+              "src/queue/processor.ts",
+              "src/queue/worker.ts"
             ]
           }
         ],
@@ -193,7 +200,8 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml"
+              "infra/sqs-queues.yaml",
+              "src/queue/processor.ts"
             ]
           }
         ],
@@ -221,9 +229,11 @@
             ]
           },
           {
+            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "src/api/openapi.yaml"
+              "src/api/openapi.yaml",
+              "src/api/routes/orders.ts"
             ]
           }
         ],
@@ -253,13 +263,31 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/shipping.ts"
             ]
           }
         ],
         "owner": null,
         "producer": [],
         "type": "rest"
+      },
+      {
+        "consumer": [],
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/api/routes/webhooks.ts"
+            ]
+          }
+        ],
+        "type": "webhook"
       }
     ],
     "stripe-payments": [
@@ -269,13 +297,31 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/stripe.ts"
             ]
           }
         ],
         "owner": null,
         "producer": [],
         "type": "rest"
+      },
+      {
+        "consumer": [],
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/api/routes/webhooks.ts"
+            ]
+          }
+        ],
+        "type": "webhook"
       }
     ],
     "warehouse-erp": [

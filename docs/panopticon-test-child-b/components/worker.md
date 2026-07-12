@@ -10,12 +10,13 @@ handling is currently logging-only (`console.log`) — it does not call `clients
 
 ## Interfaces
 
-- Owns `order-processing-queue` (`sqs`), extracted by the LLM fallback pass from
-  `infra/sqs-queues.yaml` (the queue's declaration, carrying the
-  `# panopticon-interface order-processing-queue` hint). `src/queue/processor.ts` itself only
-  references the queue via the `ORDER_PROCESSING_QUEUE_URL` environment variable, with no
-  declaration a parser or LLM pass can extract a name from — the index entry is grounded in the
-  `infra/` config, not the TypeScript. See [interfaces.md](../interfaces.md).
+- Owns `order-processing-queue` (`sqs`), extracted by the LLM fallback pass. Declared in
+  `infra/sqs-queues.yaml` (carrying the `# panopticon-interface order-processing-queue` hint) and
+  referenced again by `src/queue/processor.ts` and `src/queue/worker.ts` via the
+  `ORDER_PROCESSING_QUEUE_URL` environment variable, matching the same hinted queue.
+  `processor.ts` is recorded as both producer (`enqueueOrder`) and consumer (`receiveOrders`);
+  `worker.ts` is recorded as consumer (it drives the receive/delete loop via `processor.ts`). See
+  [interfaces.md](../interfaces.md).
 
 ## Key modules
 

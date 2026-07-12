@@ -9,7 +9,10 @@ currently calls `publishOrderEvent` — nothing in `api` or elsewhere emits even
 
 ## Interfaces
 
-- Produces `order-events` (`kafka`), owned by this repo. See [interfaces.md](../interfaces.md).
+- Produces `order-events` (`kafka`), owned by this repo (`events` component). Declared in
+  `src/events/kafka-topics.yaml` and produced again by `src/events/producer.ts`
+  (`publishOrderEvent` sends to the `order-events` topic by name). See
+  [interfaces.md](../interfaces.md).
 
 ## Key modules
 

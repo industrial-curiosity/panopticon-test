@@ -11,7 +11,15 @@ with inventory, payments, shipping, event publishing, or attachment storage is n
 
 ## Interfaces
 
-- Produces `orders-api` (`rest`), owned by this repo. See [interfaces.md](../interfaces.md).
+- Produces `orders-api` (`rest`), owned by this repo (`api` component). Declared in
+  `src/api/openapi.yaml` and produced again by `src/api/routes/orders.ts` (the route
+  implementation of that contract).
+- Produces `stripe-payments` (`webhook`) and `shipping-provider-api` (`webhook`), both owned by
+  this repo (`api` component): `src/api/routes/webhooks.ts` hosts the `POST /stripe` and
+  `POST /shipping` receiving endpoints for those same external services (matched to the existing
+  `rest` entries owned by [clients](clients.md), which consume the outbound side). These are
+  distinct interface-object entries under the same canonical names, not new interfaces — same
+  external system, different direction/type. See [interfaces.md](../interfaces.md).
 
 ## Key modules
 

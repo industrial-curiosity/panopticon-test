@@ -5,7 +5,7 @@
 
 ## panopticon-test-child-a
 
-See this repo's own diagram: [docs/panopticon-test-child-a/architecture.md](docs/panopticon-test-child-a/architecture.md)
+See this repo's own diagram: [panopticon-test-child-a/architecture.md](panopticon-test-child-a/architecture.md)
 
 ```mermaid
 graph LR
@@ -18,13 +18,13 @@ graph LR
 
 | Interface | Type | Direction | Other repo | Other repo's role |
 | --- | --- | --- | --- | --- |
-| `inventory-api` | rest | produces | [panopticon-test-child-b](docs/panopticon-test-child-b/architecture.md) | consumer |
-| `order-events` | kafka | consumes | [panopticon-test-child-b](docs/panopticon-test-child-b/architecture.md) | owner/producer |
-| `orders-api` | rest | produces/consumes | [panopticon-test-child-b](docs/panopticon-test-child-b/architecture.md) | producer |
+| `inventory-api` | rest | produces | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | consumer |
+| `order-events` | kafka | consumes | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | owner/producer |
+| `orders-api` | rest | produces/consumes | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | producer |
 
 ## panopticon-test-child-b
 
-See this repo's own diagram: [docs/panopticon-test-child-b/architecture.md](docs/panopticon-test-child-b/architecture.md)
+See this repo's own diagram: [panopticon-test-child-b/architecture.md](panopticon-test-child-b/architecture.md)
 
 ```mermaid
 graph LR
@@ -37,6 +37,6 @@ graph LR
 
 | Interface | Type | Direction | Other repo | Other repo's role |
 | --- | --- | --- | --- | --- |
-| `inventory-api` | rest | consumes | [panopticon-test-child-a](docs/panopticon-test-child-a/architecture.md) | owner/producer |
-| `order-events` | kafka | produces | [panopticon-test-child-a](docs/panopticon-test-child-a/architecture.md) | consumer |
-| `orders-api` | rest | produces | [panopticon-test-child-a](docs/panopticon-test-child-a/architecture.md) | producer/consumer |
+| `inventory-api` | rest | consumes | [panopticon-test-child-a](panopticon-test-child-a/architecture.md) | owner/producer |
+| `order-events` | kafka | produces | [panopticon-test-child-a](panopticon-test-child-a/architecture.md) | consumer |
+| `orders-api` | rest | produces | [panopticon-test-child-a](panopticon-test-child-a/architecture.md) | producer/consumer |

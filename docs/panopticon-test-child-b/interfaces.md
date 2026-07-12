@@ -7,40 +7,54 @@
 
 - **Owner:** unknown or manually created infrastructure
 - **Provenance:** extracted by LLM (no deterministic parser yet)
-- **Consumed by this repo via:** `infra/services.yaml`
+- **Consumed by this repo via:** `infra/services.yaml`, `src/clients/inventory.ts`
 
 ## `order-attachments-bucket` (s3)
 
 - **Owner:** panopticon-test-child-b / storage (this repo)
 - **Provenance:** extracted by LLM (no deterministic parser yet)
-- **Produced by this repo via:** `infra/s3-buckets.yaml`
-- **Consumed by this repo via:** `infra/s3-buckets.yaml`
+- **Produced by this repo via:** `infra/s3-buckets.yaml`, `src/storage/attachments.ts`
+- **Consumed by this repo via:** `infra/s3-buckets.yaml`, `src/storage/attachments.ts`
 
 ## `order-events` (kafka)
 
-- **Owner:** panopticon-test-child-b / panopticon-test-child-b (this repo)
-- **Produced by this repo via:** `src/events/kafka-topics.yaml`
+- **Owner:** panopticon-test-child-b / events (this repo)
+- **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Produced by this repo via:** `src/events/kafka-topics.yaml`, `src/events/producer.ts`
 
 ## `order-processing-queue` (sqs)
 
 - **Owner:** panopticon-test-child-b / worker (this repo)
 - **Provenance:** extracted by LLM (no deterministic parser yet)
-- **Produced by this repo via:** `infra/sqs-queues.yaml`
-- **Consumed by this repo via:** `infra/sqs-queues.yaml`
+- **Produced by this repo via:** `infra/sqs-queues.yaml`, `src/queue/processor.ts`
+- **Consumed by this repo via:** `infra/sqs-queues.yaml`, `src/queue/processor.ts`, `src/queue/worker.ts`
 
 ## `orders-api` (rest)
 
-- **Owner:** panopticon-test-child-b / panopticon-test-child-b (this repo)
-- **Produced by this repo via:** `src/api/openapi.yaml`
+- **Owner:** panopticon-test-child-b / api (this repo)
+- **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Produced by this repo via:** `src/api/openapi.yaml`, `src/api/routes/orders.ts`
 
 ## `shipping-provider-api` (rest)
 
 - **Owner:** unknown or manually created infrastructure
 - **Provenance:** extracted by LLM (no deterministic parser yet)
-- **Consumed by this repo via:** `infra/services.yaml`
+- **Consumed by this repo via:** `infra/services.yaml`, `src/clients/shipping.ts`
+
+## `shipping-provider-api` (webhook)
+
+- **Owner:** panopticon-test-child-b / api (this repo)
+- **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Produced by this repo via:** `src/api/routes/webhooks.ts`
 
 ## `stripe-payments` (rest)
 
 - **Owner:** unknown or manually created infrastructure
 - **Provenance:** extracted by LLM (no deterministic parser yet)
-- **Consumed by this repo via:** `infra/services.yaml`
+- **Consumed by this repo via:** `infra/services.yaml`, `src/clients/stripe.ts`
+
+## `stripe-payments` (webhook)
+
+- **Owner:** panopticon-test-child-b / api (this repo)
+- **Provenance:** extracted by LLM (no deterministic parser yet)
+- **Produced by this repo via:** `src/api/routes/webhooks.ts`

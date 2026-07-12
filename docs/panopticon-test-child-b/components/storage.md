@@ -8,12 +8,13 @@ time-limited signed URL, and delete. Out of scope: nothing in this repo currentl
 
 ## Interfaces
 
-- Owns `order-attachments-bucket` (`s3`), extracted by the LLM fallback pass from
-  `infra/s3-buckets.yaml` (the bucket's declaration, carrying the
-  `# panopticon-interface order-attachments-bucket` hint). `src/storage/attachments.ts` itself only
-  references the bucket via the `ORDER_ATTACHMENTS_BUCKET` environment variable, with no
-  declaration a parser or LLM pass can extract a name from — the index entry is grounded in the
-  `infra/` config, not the TypeScript. See [interfaces.md](../interfaces.md).
+- Owns `order-attachments-bucket` (`s3`), extracted by the LLM fallback pass. Declared in
+  `infra/s3-buckets.yaml` (carrying the `# panopticon-interface order-attachments-bucket` hint)
+  and referenced again by `src/storage/attachments.ts` via the `ORDER_ATTACHMENTS_BUCKET`
+  environment variable, matching the same hinted bucket. Both files are recorded as producer and
+  consumer evidence — `attachments.ts` both writes (`uploadAttachment`) and reads/deletes
+  (`getAttachmentUrl`, `deleteAttachment`) objects in the bucket. See
+  [interfaces.md](../interfaces.md).
 
 ## Key modules
 

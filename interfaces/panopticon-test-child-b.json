@@ -6,7 +6,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/inventory.ts"
             ]
           }
         ],
@@ -22,7 +23,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml"
+              "infra/s3-buckets.yaml",
+              "src/storage/attachments.ts"
             ]
           }
         ],
@@ -35,7 +37,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml"
+              "infra/s3-buckets.yaml",
+              "src/storage/attachments.ts"
             ]
           }
         ],
@@ -45,15 +48,17 @@
     "order-events": [
       {
         "consumer": [],
+        "extracted_by": "llm",
         "owner": {
-          "component": "panopticon-test-child-b",
+          "component": "events",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "src/events/kafka-topics.yaml"
+              "src/events/kafka-topics.yaml",
+              "src/events/producer.ts"
             ]
           }
         ],
@@ -66,7 +71,9 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml"
+              "infra/sqs-queues.yaml",
+              "src/queue/processor.ts",
+              "src/queue/worker.ts"
             ]
           }
         ],
@@ -79,7 +86,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml"
+              "infra/sqs-queues.yaml",
+              "src/queue/processor.ts"
             ]
           }
         ],
@@ -89,15 +97,17 @@
     "orders-api": [
       {
         "consumer": [],
+        "extracted_by": "llm",
         "owner": {
-          "component": "panopticon-test-child-b",
+          "component": "api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "src/api/openapi.yaml"
+              "src/api/openapi.yaml",
+              "src/api/routes/orders.ts"
             ]
           }
         ],
@@ -110,7 +120,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/shipping.ts"
             ]
           }
         ],
@@ -118,6 +129,23 @@
         "owner": null,
         "producer": [],
         "type": "rest"
+      },
+      {
+        "consumer": [],
+        "extracted_by": "llm",
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/api/routes/webhooks.ts"
+            ]
+          }
+        ],
+        "type": "webhook"
       }
     ],
     "stripe-payments": [
@@ -126,7 +154,8 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/services.yaml"
+              "infra/services.yaml",
+              "src/clients/stripe.ts"
             ]
           }
         ],
@@ -134,6 +163,23 @@
         "owner": null,
         "producer": [],
         "type": "rest"
+      },
+      {
+        "consumer": [],
+        "extracted_by": "llm",
+        "owner": {
+          "component": "api",
+          "repo": "panopticon-test-child-b"
+        },
+        "producer": [
+          {
+            "repo": "panopticon-test-child-b",
+            "source_files": [
+              "src/api/routes/webhooks.ts"
+            ]
+          }
+        ],
+        "type": "webhook"
       }
     ]
   },

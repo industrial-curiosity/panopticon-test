@@ -10,13 +10,42 @@ parsers (REST/OpenAPI, Kafka) and LLM-fallback extraction against a real TypeScr
 
 ## Components
 
-- [api](components/api.md) — HTTP route handlers and the OpenAPI spec for order management
+- [api](components/api.md) — HTTP route handlers and the OpenAPI spec for order management, plus
+  Stripe/shipping webhook receivers
 - [events](components/events.md) — Kafka producer for order lifecycle events
 - [worker](components/worker.md) — long-running SQS consumer that processes order jobs
 - [clients](components/clients.md) — outbound REST clients to inventory, Stripe, and shipping
 - [storage](components/storage.md) — S3-backed order attachment storage
 
+## Architecture diagram
+
+```mermaid
+flowchart LR
+  callers([external callers]) -->|orders-api REST| api[api]
+
+  stripeExt[[Stripe]] -->|"webhook: POST /stripe"| api
+  shipExt[[Shipping provider]] -->|"webhook: POST /shipping"| api
+
+  clients[clients] -->|consumes inventory-api| invExt[[Inventory service]]
+  clients -->|consumes stripe-payments| stripeExt
+  clients -->|consumes shipping-provider-api| shipExt
+
+  events[events] -->|produces order-events| kafka[(Kafka)]
+
+  worker[worker] <-->|order-processing-queue| sqs[(SQS)]
+
+  storage[storage] <-->|order-attachments-bucket| s3[(S3 bucket)]
+```
+
+[org diagram](../architecture.md#panopticon-test-child-b)
+
 ## Data flow
+
+The five components are not wired to each other in code (as the diagram above shows) — each one
+only connects to the external interface(s) it produces or consumes. `worker` and `storage` both
+write and read their respective queue/bucket; `api` is both a producer to external callers
+(`orders-api`) and a receiver of inbound webhook calls from Stripe and the shipping provider
+(`src/api/routes/webhooks.ts`).
 
 The modules above are not wired together in code: `package.json` declares a `dev` script
 (`ts-node src/index.ts`) and a `main` entry (`dist/index.js`) that would presumably assemble the
@@ -33,7 +62,9 @@ storage modules.
 Each module's intended role, as declared by its own code:
 
 1. `api` exposes `orders-api` (`GET/POST /orders`, `GET/PATCH /orders/:id`,
-   `POST /orders/:id/cancel`) per `src/api/openapi.yaml`.
+   `POST /orders/:id/cancel`) per `src/api/openapi.yaml`, and hosts webhook receivers
+   (`POST /stripe`, `POST /shipping`) for the `stripe-payments` and `shipping-provider-api`
+   interfaces that `clients` consumes on the outbound side.
 2. `events` publishes to the `order-events` Kafka topic via `publishOrderEvent`.
 3. `worker` long-polls an SQS queue (`ORDER_PROCESSING_QUEUE_URL`) for `OrderJob` messages and
    processes them.
@@ -56,7 +87,11 @@ Each module's intended role, as declared by its own code:
   this repo); see [interfaces.md](interfaces.md).
 - **Stripe** (`STRIPE_SECRET_KEY`) — external payments API consumed by `clients` via the `stripe`
   npm package, declared in `infra/services.yaml` and indexed as `stripe-payments` (`owner: null` —
-  third-party); see [interfaces.md](interfaces.md).
+  third-party for the outbound `rest` entry). `api` also owns a `webhook`-type entry under the
+  same `stripe-payments` name for the inbound `POST /stripe` receiver; see
+  [interfaces.md](interfaces.md).
 - **Shipping provider** (`SHIPPING_API_URL`) — external REST dependency consumed by `clients`,
   declared in `infra/services.yaml` and indexed as `shipping-provider-api` (`owner: null` —
-  third-party); see [interfaces.md](interfaces.md).
+  third-party for the outbound `rest` entry). `api` also owns a `webhook`-type entry under the
+  same `shipping-provider-api` name for the inbound `POST /shipping` receiver; see
+  [interfaces.md](interfaces.md).

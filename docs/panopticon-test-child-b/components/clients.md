@@ -11,12 +11,12 @@ directory (no route handler or worker wires these in).
 ## Interfaces
 
 - Consumes `inventory-api`, `stripe-payments`, and `shipping-provider-api` (all `rest`), extracted
-  by the LLM fallback pass from `infra/services.yaml` (each carrying its own
-  `# panopticon-interface <name>` hint). All three have `owner: null` in the index — they are
-  external services this repo does not own. The `.ts` client files (`inventory.ts`, `stripe.ts`,
-  `shipping.ts`) reference the same services only via environment-variable base URLs, with no
-  declaration a parser or LLM pass can extract a name from — the index entries are grounded in the
-  `infra/` config, not the TypeScript. See [interfaces.md](../interfaces.md).
+  by the LLM fallback pass. Each is declared in `infra/services.yaml` (carrying its own
+  `# panopticon-interface <name>` hint) and consumed again by this component's own client file
+  (`inventory.ts`, `stripe.ts`, `shipping.ts`), matched to the same interface by its
+  environment-variable base URL (`INVENTORY_API_URL`, `SHIPPING_API_URL`) or, for Stripe, the SDK
+  it wraps. All three have `owner: null` in the index — they are external services this repo does
+  not own. See [interfaces.md](../interfaces.md).
 
 ## Key modules
 
