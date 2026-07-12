@@ -32,6 +32,9 @@ Tooling-currency detection for child repos, plus robustness fixes surfaced by ex
   token/transport mechanism the bootstrap script already uses for every other request (never a
   `gh api` subprocess call, which depends on `gh auth login` specifically) — refreshed in place on
   every bootstrap rerun of an already-initialized repo.
+- Bootstrap now writes `panopticon/.gitignore` (`__pycache__/`) alongside the vendored local-tooling
+  modules, so running them (as the bundled skills instruct) never leaves compiled bytecode staged
+  on the next `git add -A`.
 
 **Architecture diagrams** (`architecture-diagrams`)
 - `python3 -m panopticon.org_diagram_link`: prints an immediately clickable link to a child repo's
@@ -56,6 +59,10 @@ Tooling-currency detection for child repos, plus robustness fixes surfaced by ex
 - `instance_default_branch` resolution depended on `gh auth login` having been run interactively,
   a stricter precondition than the token-based auth the bootstrap script's own downloads already
   relied on successfully — a working `GH_TOKEN`/`GITHUB_TOKEN` now resolves it directly.
+- The org diagram's links to each child repo's own diagram used the href `docs/{repo}/architecture.md`,
+  but the org diagram file itself already lives inside `docs/`, so GitHub resolved that relative link
+  to the non-existent `docs/docs/{repo}/architecture.md` — every such link 404'd. Corrected to the
+  literal relative href `{repo}/architecture.md`.
 
 ## [0.1.0] - 2026-07-10
 
