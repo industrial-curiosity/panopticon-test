@@ -48,10 +48,12 @@ rules as the rest of that layer.
 
 The org diagram (rendered deterministically from the compiled index by the master-sync capability) SHALL be a
 single document at the instance repo root containing one section per repo that has at least one external
-interface, ordered alphabetically by repo name. Each section SHALL contain a relationship diagram (this repo
-as the center node, one node per other repo it relates to, edges labeled by interface name) followed by a
-table listing each external interface: name, type, direction relative to this repo, the other repo, and that
-repo's role (owner, producer, or consumer).
+interface or dependency, ordered alphabetically by repo name. Each section SHALL contain a relationship
+diagram (this repo as the center node, one node per other repo it relates to, edges labeled by interface or
+dependency name and visually distinguished by kind — dashed edges for interfaces, solid edges for
+dependencies) followed by a table listing each external interface or dependency: kind (interface or
+dependency), name, type or ecosystem, direction relative to this repo, the other repo, and that repo's role
+(owner, producer, or consumer).
 
 #### Scenario: Repo with external interfaces gets a section
 
@@ -65,12 +67,27 @@ repo's role (owner, producer, or consumer).
 - **WHEN** every one of a repo's interface entries is internal-only (see the internal-only exclusion rule)
 - **THEN** the org diagram document contains no section for that repo
 
+#### Scenario: Repo with external dependencies gets a section
+
+- **WHEN** the compiled dependency index contains one or more dependency entries where a repo participates
+  alongside at least one other repo (as producer or consumer)
+- **THEN** the org diagram document contains that repo's section (or that repo's existing interface section
+  is extended) with dependency edges rendered visually distinct from interface edges, and the repo's table
+  includes rows for each external dependency
+
+#### Scenario: Repo with both interfaces and dependencies gets one combined section
+
+- **WHEN** a repo has at least one external interface and at least one external dependency
+- **THEN** the repo's section contains a single relationship diagram showing both kinds of edges and a single
+  table listing both, rather than two separate sections
+
 ### Requirement: Internal-only interfaces excluded from the org diagram
 
-An interface entry SHALL be considered internal-only, and excluded from the org diagram entirely, when the
-union of its owner's repo, every producer repo, and every consumer repo contains exactly one distinct repo
-name. An entry SHALL be considered external for a given repo, and included in that repo's section, only when
-this union contains more than one distinct repo name and includes that repo.
+An interface or dependency entry SHALL be considered internal-only, and excluded from the org diagram
+entirely, when the union of its owner's repo, every producer repo, and every consumer repo contains exactly
+one distinct repo name. An entry SHALL be considered external for a given repo, and included in that repo's
+section, only when this union contains more than one distinct repo name and includes that repo. This applies
+identically to interface entries and dependency entries.
 
 #### Scenario: Single-repo interface excluded
 
@@ -82,6 +99,39 @@ this union contains more than one distinct repo name and includes that repo.
 - **WHEN** an interface entry's producer is repo A and consumer is repo B
 - **THEN** the entry appears in repo A's section (direction: produces, other repo: B) and in repo B's section
   (direction: consumes, other repo: A)
+
+#### Scenario: Single-repo dependency excluded
+
+- **WHEN** a dependency entry's owner, producer, and consumer all name the same single repo (a repo
+  depending on its own published package)
+- **THEN** that entry does not appear in any org diagram section
+
+#### Scenario: Cross-repo dependency included in both repos' sections
+
+- **WHEN** a dependency entry's producer is repo A and consumer is repo B
+- **THEN** the entry appears in repo A's section (direction: produces, other repo: B) and in repo B's section
+  (direction: consumes, other repo: A)
+
+### Requirement: Linked dependency and interface edges deduplicate
+
+The org diagram SHALL render a single edge between two repos, rather than two separate edges, when a
+dependency entry's `links_to_interface` names an interface entry that also relates the same two repos (same
+owner/producer and consumer pairing); the single edge SHALL be labeled to indicate it represents both the
+interface and the dependency.
+
+#### Scenario: Linked generated client collapses to one edge
+
+- **WHEN** a dependency entry has `links_to_interface` naming an interface entry that relates the same
+  producer and consumer repos
+- **THEN** the org diagram's relationship diagram for those repos shows one edge between them, not two, and
+  the edge's label indicates both the interface and dependency names
+
+#### Scenario: Unlinked dependency and interface between the same repos render separately
+
+- **WHEN** a dependency entry and an interface entry both relate the same two repos but no
+  `panopticon-dependency-of` hint links them
+- **THEN** the org diagram renders both edges separately, without assuming they represent the same
+  relationship
 
 ### Requirement: Diagram navigation uses plain links, not in-diagram click-through
 
@@ -188,3 +238,103 @@ merge, no need to already know the instance repo's URL or branch by heart.
 - **WHEN** the user runs the org-diagram link script
 - **THEN** it exits non-zero with a message explaining that the field is missing and the live lookup
   also failed, and how to fix either — it SHALL NOT print a link built from a guessed branch name
+
+### Requirement: Child repo README links to both diagrams
+
+A child repo's `README.md` SHALL contain, at the top of the file, two markdown links in this order: the
+repo's own architecture diagram link directly above the org architecture diagram link. Both SHALL be labeled
+with the repo name to distinguish them (`{repo} architecture` and `org architecture`), never a bare
+"architecture" label. These are written by the `panopticon-doc-generation` skill as part of its normal
+architecture-overview pass — the same agent-authored treatment as the existing `## Architecture diagram`
+back-link — not a separate deterministic script or a standalone CI check.
+
+The own-repo link SHALL be a relative markdown link to this repo's `architecture.md` at its configured
+`docs_location` (e.g. `docs/architecture.md`), following the same relative-link discipline as the existing
+diagram-section back-link: it resolves once this repo's docs are merged into the instance repo, not
+necessarily before.
+
+The org link SHALL be a fully-qualified GitHub URL, obtained by running `python3 -m
+panopticon.org_diagram_link` and using its printed output verbatim — not by re-deriving the URL or its
+fallback behavior in the skill itself, since the script already implements the correct config-first,
+live-lookup-fallback, fail-loudly-never-guess logic (architecture-diagrams capability, "Org-diagram link
+script") and restating it elsewhere risks the two drifting apart.
+
+#### Scenario: Doc generation writes both links in the correct order
+
+- **GIVEN** a child repo with `panopticon/config.json` `repo: "svc-a"`, `instance:
+  "acme/panopticon-instance"`, and `instance_default_branch: "main"`
+- **WHEN** `panopticon-doc-generation` produces or refreshes `README.md`
+- **THEN** the top of the file contains `[svc-a architecture](docs/architecture.md)` immediately followed by
+  `[org architecture](https://github.com/acme/panopticon-instance/blob/main/docs/architecture.md#svc-a)`, in
+  that order — the second line matching exactly what `python3 -m panopticon.org_diagram_link` prints for
+  this config
+
+#### Scenario: Org diagram link script's own fallback and failure behavior applies unchanged
+
+- **GIVEN** a child repo's `panopticon/config.json` has no `instance_default_branch`
+- **WHEN** `panopticon-doc-generation` runs `python3 -m panopticon.org_diagram_link` to obtain the README org
+  link
+- **THEN** the script's own existing fallback (live lookup) and failure (loud error, never a guessed branch)
+  behavior determines the outcome; if the script exits non-zero, doc generation stops and reports the gap
+  rather than writing a partial or guessed link
+
+### Requirement: Instance repo README links to the org diagram only
+
+An instance repo's `README.md` SHALL contain, at the top of the file, exactly one relative markdown link:
+`[org architecture](docs/architecture.md)`. It SHALL NOT contain links to individual child repos' diagrams —
+the org diagram itself already enumerates every repo with an external interface or dependency.
+
+#### Scenario: Instance README contains only the org link
+
+- **WHEN** an instance repo's `README.md` top matter is inspected
+- **THEN** it contains `[org architecture](docs/architecture.md)` and no per-child-repo diagram links
+
+### Requirement: Org diagram renders an explicit empty-state placeholder
+
+When the compiled index (interfaces and dependencies combined) contains zero repo sections, `write_org_diagram`
+SHALL write a placeholder `docs/architecture.md` rather than an empty or minimal document: a diagram depicting
+six nodes labeled `?`, connected to form a hexagon with no meaningful edge labels, preceded by a markdown link
+to `setup-guide.md#4-initialize-a-child-repo`. This placeholder SHALL be produced by the same
+deterministic render path every time `write_org_diagram` runs against a zero-repo compiled index — not written
+once and left stale — so it stays current if the org config or diagram format changes before the first child
+repo merges.
+
+#### Scenario: write_org_diagram renders the placeholder for an empty compiled index
+
+- **GIVEN** a compiled interface index and compiled dependency index that together contain zero repo sections
+- **WHEN** `write_org_diagram` runs
+- **THEN** it writes `docs/architecture.md` containing the link to `setup-guide.md#4-initialize-a-child-repo`
+  followed by a diagram of six `?`-labeled nodes forming a hexagon
+
+#### Scenario: First real merge replaces the placeholder
+
+- **GIVEN** an instance repo whose `docs/architecture.md` is currently the empty-state placeholder
+- **WHEN** the first child repo merges an interface or dependency that produces at least one repo section
+- **THEN** `write_org_diagram` overwrites the placeholder with the real org diagram content
+
+### Requirement: Template repo ships a non-dead placeholder and instance-appropriate README seed
+
+The template repo SHALL ship the empty-state placeholder `docs/architecture.md` (see "Org diagram renders an
+explicit empty-state placeholder") directly in its tracked tree, so a newly created instance repo's
+`README.md` org-architecture link is never dead, even before any `write_org_diagram` run.
+
+The template repo's own `README.md` Overview section (the paragraph between the `## Overview` heading and the
+logo image) SHALL be org-agnostic instance-appropriate boilerplate plus the `[org architecture]
+(docs/architecture.md)` link, followed by a maintainer note — placed between that text and the logo image —
+instructing the org to replace the paragraph with a description specific to their organization. No dynamic
+substitution of org-specific content SHALL be assumed or attempted, since no reliable event fires when a
+repository is created from a template.
+
+#### Scenario: Fresh instance repo has a working architecture link on day one
+
+- **GIVEN** an organization creates a new instance repo via "Use this template"
+- **WHEN** they open the newly created repo's `README.md` before running any Panopticon tooling
+- **THEN** the `[org architecture](docs/architecture.md)` link resolves to the shipped placeholder content,
+  not a broken link
+
+#### Scenario: Maintainer note appears between the overview text and the logo
+
+- **WHEN** the template repo's `README.md` is inspected
+- **THEN** the Overview section reads: instance-appropriate boilerplate text, then the org architecture link,
+  then a maintainer note instructing the org to personalize the paragraph, then the logo image — in that
+  order

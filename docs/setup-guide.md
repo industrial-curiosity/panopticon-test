@@ -88,7 +88,8 @@ index updates — run in each developer's own AI agent harness and need none of 
     "interface-conflict": "advisory",
     "diagram-missing": "advisory"
   },
-  "protected_paths": [".agents/skills/panopticon-doc-generation/references/custom.md"]
+  "protected_paths": [".agents/skills/panopticon-doc-generation/references/custom.md"],
+  "internal_registries": ["packages.example.com"]
 }
 ```
 
@@ -110,6 +111,15 @@ index updates — run in each developer's own AI agent harness and need none of 
   a commit, never the tracked `.gitattributes`), so it's invisible in the tracked tree; each sync run's
   GitHub Actions step summary lists which paths were protected that run as the audit trail. Entries
   are exact file paths, not directory globs — list each customized file individually.
+- **`internal_registries`** *(optional, default `[]`)* — host or URL substrings identifying your org's
+  own private package registry/registries (e.g. an Artifactory or Nexus host). Dependency-indexing uses
+  this to recognize that a repo's dependency resolves from your org's own infrastructure rather than a
+  third-party one — the same field covers both a consumer repo installing an internal package and a
+  producer repo publishing one, so you configure your registry identity once, not per ecosystem.
+  Ecosystems whose dependency declarations already embed your org's identity (e.g. Go module paths
+  under your org's GitHub organization) need no entry here at all. When a dependency or interface
+  can't be resolved automatically, developers pin it with a hint comment — see
+  `docs/hint-reference.md` for every hint form and exactly how each one behaves.
 
 ## 4. Initialize a child repo
 
@@ -117,22 +127,31 @@ Initialization has three phases: a deterministic bootstrap, an AI agent pass, an
 
 ### Phase 1 — Bootstrap (from the child repo, no AI needed)
 
-Run the bootstrap script from inside the child repo. It will prompt for your instance slug if
-`PANOPTICON_INSTANCE` is not already set:
+Run the public template launcher from inside the child repo. The same command supports public and private
+instance repositories:
 
 ```bash
 cd my-service
-export PANOPTICON_INSTANCE=acme/panopticon-instance
-curl -fsSL "https://raw.githubusercontent.com/${PANOPTICON_INSTANCE}/main/install.py" | python3
-
-# or call it directly and enter it again when prompted
-curl -fsSL "https://raw.githubusercontent.com/acme/panopticon-instance/main/install.py" | python3
+curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-eye/main/install.py | python3
 ```
 
-Before installing anything, the script asks where skills should live (default `.agents/skills/`; see
-[`docs/agentskills-support.md`](agentskills-support.md) for which tools read which locations) — this
-works even when piped through `curl`. Set `PANOPTICON_SKILLS_LOCATION` to skip the prompt for
-non-interactive/CI runs.
+The launcher asks for any missing interactive inputs, authenticates when the selected instance is private,
+and then runs that instance repository's own installer. Set stable inputs before repeat or non-interactive
+runs:
+
+```bash
+export PANOPTICON_INSTANCE=YOUR-ORG/YOUR-INSTANCE-REPO
+export PANOPTICON_SKILLS_LOCATION=.agents/skills
+# Optional: select a branch, tag, or commit instead of the instance's default branch.
+export PANOPTICON_INSTANCE_REF=YOUR-INSTANCE-REF
+```
+
+For example, use `PANOPTICON_INSTANCE=acme/panopticon-instance` and
+`PANOPTICON_INSTANCE_REF=release-2026-07`. Private instances use `GH_TOKEN`, `GITHUB_TOKEN`, or an existing
+`gh auth` session. Supply tokens through your shell or CI secret environment; never place one directly in
+the command. The instance installer chooses where skills live (template default `.agents/skills/`; see
+[`docs/agentskills-support.md`](agentskills-support.md)). Set `PANOPTICON_SKILLS_LOCATION` to skip that
+prompt for non-interactive or CI runs.
 
 Once a location is chosen, the script will:
 
@@ -150,9 +169,9 @@ Once a location is chosen, the script will:
 ### Phase 2 — Agent (follow the printed prompt)
 
 Give your AI agent (Claude Code, Cursor, or whichever tool you configured) the printed prompt — a single
-skill that sequences interface indexing, documentation generation, and finalization on its own, with a
-resumable checkpoint if your agent session gets interrupted partway through. Each of the underlying
-skills also works standalone if you'd rather run a step by itself.
+skill that sequences interface indexing, dependency indexing, documentation generation, and finalization
+on its own, with a resumable checkpoint if your agent session gets interrupted partway through. Each of
+the underlying skills also works standalone if you'd rather run a step by itself.
 
 No `PANOPTICON_LLM_*` secrets or variables are needed locally — the agent uses its own harness.
 
@@ -231,10 +250,12 @@ unconditionally by design); `protected_paths` only protects the *instance* repo'
 
 ## 7. Finding the org-wide architecture diagram from a child repo
 
-A child repo's own `## Architecture diagram` section links back to the org diagram, but that link is
-relative and only resolves once this repo's docs have been merged into the instance repo (see the
-architecture-diagrams capability) — it won't work if you click it before then. For an immediately
-clickable link, from your own checkout, before any merge:
+A child repo's `README.md` already links to both diagrams at the top — its own (relative, resolves once
+merged into the instance) and the org diagram (a fully-qualified GitHub URL, clickable immediately). The
+`## Architecture diagram` section's own back-link is relative too, and only resolves once this repo's docs
+have been merged into the instance repo (see the architecture-diagrams capability) — it won't work if you
+click it before then. To regenerate the immediately-clickable org link yourself, from your own checkout,
+before any merge:
 
 ```bash
 python3 -m panopticon.org_diagram_link

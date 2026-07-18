@@ -275,8 +275,10 @@ def load_shards(instance_root):
 
 def merge_into_instance(instance_root, repo, local_doc):
     """Replace the repo's shard on disk, rebuild the compiled index, rebuild the org diagram
-    (design D3: same commit as the compiled index, immediately after compile_index), and return
-    the merge report."""
+    (design D3: same commit as the compiled index, immediately after compile_index — reads both
+    compiled indices fresh from disk, so it also picks up the current dependency-index state
+    regardless of which merge path last ran; see diagrams.write_org_diagram), and return the merge
+    report."""
     instance_root = Path(instance_root)
     interfaces_dir = instance_root / INTERFACES_DIR
     compiled_path = interfaces_dir / COMPILED_BASENAME
@@ -295,7 +297,7 @@ def merge_into_instance(instance_root, repo, local_doc):
     compiled_path.write_text(dumps_index(after), encoding="utf-8")
     diagram_format = load_diagram_config(instance_root)["format"]
     require_supported_diagram_format(diagram_format)
-    write_org_diagram(after, instance_root, diagram_format)
+    write_org_diagram(instance_root, diagram_format)
     return diff_compiled(before, after, repo)
 
 

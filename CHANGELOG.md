@@ -2,6 +2,97 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [0.1.4] - 2026-07-15
+
+`panopticon-init` now wires dependency indexing into the standard initialization flow, so every
+newly initialized repo gets a populated dependency index alongside its interface index instead of
+requiring dependency indexing as a separate, easy-to-forget manual step. Established across
+`openspec/changes/init-dependency-steps`.
+
+### Added
+
+**Repo initialization** (`repo-initialization`)
+- `panopticon-init`'s orchestration grows from four steps to six: `panopticon-dependency-naming`
+  and `panopticon-dependency-extraction` now run between interface extraction and doc generation,
+  so a `panopticon-dependency-of` hint can reference an already-built interface index and
+  generated docs include dependency edges from the first `/panopticon-init` run.
+- The checkpoint log (`panopticon/.init-log.json`) tracks the two new steps, preserving resumable
+  init across an interrupted agent session.
+
+### Notes
+
+- End-to-end verification of a full `/panopticon-init` run against a real repo with genuine
+  internal dependencies is deferred to the next real initialization — no fixture child+instance
+  repo pair with a real cross-repo dependency exists in this workspace, and the orchestration is
+  agent-followed skill instructions with no Python test harness to simulate it.
+
+## [0.1.3] - 2026-07-15
+
+Discoverable architecture-diagram links at the top of every instance and child repo README, and a
+non-dead placeholder org diagram for a freshly created instance. Established across
+`openspec/changes/readme-architecture-links`.
+
+### Added
+
+**Architecture diagrams** (`architecture-diagrams`)
+- Child repo `README.md` now links to both diagrams at the top, own-repo above org: a relative link to
+  this repo's own `architecture.md`, and a fully-qualified GitHub URL to the org diagram — obtained by
+  running `python3 -m panopticon.org_diagram_link` and using its printed output verbatim, so the two can
+  never disagree — written by `panopticon-doc-generation` as part of its normal architecture-overview
+  pass.
+- Instance repo `README.md` now links to the org diagram at the top (`docs/architecture.md`) only — no
+  per-child-repo links, since the org diagram itself already enumerates every repo.
+- `write_org_diagram` renders an explicit empty-state placeholder — a link to initializing a child repo
+  plus a hexagon of six `?` nodes — in place of a bare "no relationships yet" line, produced by the same
+  deterministic render path every run rather than written once and left stale.
+- The template repo ships that placeholder `docs/architecture.md` directly, so a freshly created
+  instance repo's architecture link is never dead even before any child repo has merged; its own
+  `README.md` Overview section now carries org-agnostic instance-appropriate text plus a maintainer note,
+  replacing template self-description that no longer applies once copied into an instance repo via "Use
+  this template."
+
+## [0.1.2] - 2026-07-14
+
+Internal (same-org) library/package dependency tracking, as a relationship distinct from runtime
+interfaces, with its own schema, parsers, merge/conflict detection, and combined org-diagram
+rendering. Established across `openspec/changes/track-internal-dependencies`.
+
+### Added
+
+**Dependency indexing** (`dependency-indexing`, new capability)
+- Separate JSON index schema (`dependencies/{repo}.json` shards, `dependencies/index.json`
+  compiled) — own files, never recorded as an interface `type` — with `owner`/`producer`/`consumer`
+  and, on consumer repo objects, `apis`: a deduplicated, sorted list of the specific modules the
+  consumer imports (import-level granularity, not call-site).
+- Layered internality detection, most portable first: zero-configuration structural resolution for
+  ecosystems whose declarations embed the org's own GitHub identity (Go module paths under
+  `github.com/{org}/...`, the first deterministic parser); an org-declared `internal_registries`
+  config field, reused for both consumer-side detection and producer self-registration; a
+  no-checkout instance cross-reference (a plain filesystem read in CI, since the shared workflows
+  already check out the instance repo; a best-effort live GitHub API read locally); and a
+  `panopticon-dependency` hint / LLM fallback for anything else, with the same parser-gap
+  reporting contract as interfaces.
+- `panopticon-dependency-of <interface-name>` hint: links a dependency that's really a
+  packaged/generated client for an interface this org already tracks — never inferred from naming
+  conventions, only set explicitly.
+- Shard replace, deterministic compiled-index rebuild, and conflict detection
+  (`ownership-dispute`, and the dependency-specific `unregistered-producer`: an internal candidate
+  with consumers but no self-registered producer anywhere).
+- `docs/hint-reference.md`: syntax, placement, and effect for every hint form in the tooling
+  (`panopticon-interface`, `panopticon-dependency`, `panopticon-dependency-of`).
+
+**Architecture diagrams** (`architecture-diagrams`)
+- The org diagram now renders dependency edges alongside interface edges in one combined section
+  per repo — dashed for interfaces, solid for dependencies — and collapses a dependency linked to
+  an interface via `panopticon-dependency-of` into a single edge instead of two.
+
+### Notes
+
+- CI workflow wiring (the shared `panopticon-pr.yml`/`panopticon-merge.yml` invoking the new
+  extraction/merge tooling automatically) is not yet included — local/manual use of
+  `python3 -m panopticon.dependency_extraction` / `dependency_merge` is fully supported today,
+  matching the existing precedent that full-repo interface extraction is also local-only.
+
 ## [0.1.1] - 2026-07-12
 
 Tooling-currency detection for child repos, plus robustness fixes surfaced by exercising the
@@ -172,5 +263,7 @@ gating for pull requests. Established across `openspec/changes/establish-panopti
 - Exit-code collision where an uncaught check exception and a genuine "stale" verdict produced the
   same exit code, causing crashes to be silently misreported as business verdicts.
 
+[0.1.3]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.3
+[0.1.2]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.2
 [0.1.1]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.1
 [0.1.0]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.0
