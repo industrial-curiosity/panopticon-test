@@ -22,8 +22,9 @@ Create a private instance from this template, run its LiteLLM, OpenAI, or Bedroc
 configuration workflow, and
 initialize child repositories. The [org-owner setup guide](docs/setup-guide.md)
 walks through that process,
-including credentials, provider choices, template sync, customization
-protection, and local recovery from failed syncs.
+including the four rollout gates (workflow access, effective configuration,
+caller identity/credentials, and real request compatibility), provider choices,
+template sync, customization protection, and local recovery from failed syncs.
 For required values, optional request budgets, defaults, and the exact
 organization integration path, use the [provider-configuration guide](docs/provider-configuration.md).
 

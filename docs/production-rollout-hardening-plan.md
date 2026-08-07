@@ -39,7 +39,7 @@ change is implemented or validated.
 | 4. Effective provider requirements | locally verified | [model-effective-provider-requirements](../openspec/changes/archive/2026-08-02-model-effective-provider-requirements/) — focused provider coverage: 218 tests; full suite: 632 tests; strict OpenSpec and reusable-workflow contract validation passed on 2026-08-02. |
 | 5. Negative scope and `panopticon-ignore` | unstarted | No assigned OpenSpec change. |
 | 6. Organization-scale interface names | unstarted | No assigned OpenSpec change. |
-| 7. Supported four-gate operating process | unstarted | No assigned OpenSpec change. |
+| 7. Supported four-gate operating process | locally verified | [harden-four-gate-operating-process](../openspec/changes/archive/2026-08-07-harden-four-gate-operating-process/): 684-test stdlib suite, 28 focused recovery/workflow tests, reusable-workflow contract validation, targeted strict OpenSpec validation, and Markdownlint passed on 2026-08-07. Full `openspec validate --all --strict --no-interactive` passed 15/16 specs; the pre-existing `master-sync` failure is `requirements.3.text` because `SHALL` is not on the first physical requirement line ([spec](../openspec/specs/master-sync/spec.md#L67)). Follow-up: move `SHALL` onto that line and rerun full validation. No private-instance sandbox or live provider request was run, so this step is not operationally proven. |
 | 8. Complex-organization instance template | unstarted | No assigned OpenSpec change. |
 | 9. Sandbox rollout | unstarted | No recorded sandbox run. |
 

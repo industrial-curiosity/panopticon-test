@@ -75,11 +75,74 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertNotIn("PANOPTICON_LLM_API_KEY", text)
         self.assertNotIn("PANOPTICON_LLM_ENDPOINT", text)
 
+    def test_bedrock_credential_failure_has_a_surviving_caller_recovery_boundary(self):
+        text = self.workflow("panopticon-pr-bedrock.yml")
+        credential_step = text.index("id: instance_credentials")
+        recovery_step = text.index("- name: Report instance-managed credential failure")
+        identity_step = text.index("- name: Verify caller cloud identity")
+        preflight_step = text.index("- name: Provider preflight")
+        self.assertIn("timeout-minutes: 1\n        uses: ./.panopticon-instance/.github/actions/panopticon-aws-credentials", text)
+        self.assertIn(
+            "if: always() && steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'instance-managed'",
+            text,
+        )
+        self.assertIn("steps.instance_credentials.outcome != 'success'", text)
+        self.assertIn("steps.instance_credentials.outcome != 'skipped'", text)
+        self.assertIn("from panopticon.recovery import credential_action_recovery", text)
+        self.assertIn("Panopticon gate 3 failed: caller identity and credentials", text)
+        self.assertIn("aws sts get-caller-identity --output json", text)
+        self.assertIn("Panopticon gate 3 passed: caller identity and credentials", text)
+        self.assertLess(credential_step, recovery_step)
+        self.assertLess(recovery_step, identity_step)
+        self.assertLess(identity_step, preflight_step)
+
+    def test_bedrock_failure_guidance_is_public_safe(self):
+        text = self.workflow("panopticon-pr-bedrock.yml")
+        for organization_value in ("YotpoLtd", "402837048690", "YotpoLtd/", "yotpo-api"):
+            self.assertNotIn(organization_value, text)
+
+    def test_public_four_gate_guidance_is_self_contained_and_safe(self):
+        setup_guide = (ROOT / "docs" / "setup-guide.md").read_text(encoding="utf-8")
+        getting_started = (ROOT / "PANOPTICON.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Four-gate rollout and troubleshooting",
+            "Reusable-workflow access",
+            "Effective provider configuration",
+            "Caller-repository identity and credentials",
+            "Real provider-request compatibility",
+            "actions/permissions/access",
+            "Administration: Read",
+            "Contents: Read",
+            "HTTP 403",
+            "--jq '.access_level'",
+            "settings/actions",
+            "Protected-path debt register",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, setup_guide)
+        for phrase in (
+            "Four-gate rollout checks",
+            "caller-owned gate-3 summary",
+            "real structured inference",
+            "Administration: Read",
+            "Contents: Read",
+            "A 403 means the token lacks",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, getting_started)
+        for document in (setup_guide, getting_started):
+            self.assertNotIn("YotpoLtd", document)
+            self.assertNotIn("402837048690", document)
+            self.assertNotIn("yotpo-api", document)
+        self.assertIn("Wire the four caller GitHub Actions workflows", setup_guide)
+        self.assertNotIn("Wire the three caller GitHub Actions workflows", setup_guide)
+        self.assertNotIn("github_owned_allowed,plan", setup_guide)
+
     def test_openai_workflow_is_a_standalone_litellm_clone_with_openai_identity(self):
         text = self.workflow("panopticon-pr-openai.yml")
         self.assertIn("PANOPTICON_LLM_PROVIDER: openai", text)
         self.assertNotIn("PANOPTICON_LLM_ENDPOINT", text)
-        self.assertIn("missing OpenAI configuration", text)
+        self.assertIn("Provider: `OpenAI`", text)
         self.assertNotIn("uses: ./.github/workflows/panopticon-pr-litellm.yml", text)
         self.assertNotIn("requirements-bedrock.txt", text)
         self.assertNotIn("inputs.endpoint", text)
@@ -201,6 +264,10 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertIn("PYTHONPATH: ${{ github.workspace }}", text)
         self.assertIn("from panopticon.configure_instance import configure", text)
         self.assertIn("Panopticon provider configuration is invalid", text)
+        self.assertIn("Panopticon gate 2 failed: effective provider configuration", text)
+        self.assertIn("Expected resource: `panopticon.config.json`", text)
+        self.assertIn("generated caller revisions are per child", text)
+        self.assertIn("Panopticon gate 2 passed: effective provider configuration", text)
         self.assertIn("GITHUB_STEP_SUMMARY", text)
         self.assertIn("No credential values were accepted or persisted", text)
         self.assertIn("required organization-level Actions names", text)
@@ -210,6 +277,10 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertIn("could not be pushed", text)
         self.assertIn("git show --format= -- panopticon.config.json", text)
         self.assertIn("exit 1", text)
+        self.assertIn('print(f"::error::{reason}; see the step summary")', text)
+        self.assertNotIn(
+            'raise SystemExit(f"::error::{reason}; see the step summary")', text
+        )
 
     def test_workflow_failure_paths_write_actionable_summaries(self):
         expected_summary_text = {
@@ -228,6 +299,13 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertIn("Panopticon provider configuration is invalid", configuration_action)
         self.assertIn("GITHUB_STEP_SUMMARY", configuration_action)
         self.assertIn("see the step summary", configuration_action)
+        self.assertIn(
+            'print(f"::error::{reason}; see the step summary")', configuration_action
+        )
+        self.assertIn(
+            'print(f"::error::{reason}; see the step summary")',
+            self.workflow("panopticon-pr-bedrock.yml"),
+        )
 
     def test_merge_and_close_accept_only_canonical_instance_token(self):
         for name in ("panopticon-merge.yml", "panopticon-pr-close.yml"):
@@ -250,6 +328,12 @@ class TestProviderWorkflows(unittest.TestCase):
             self.assertIn("from panopticon.recovery import stale_caller_recovery", text)
             self.assertIn("from panopticon.recovery import missing_provider_recovery", text)
             self.assertIn("except ModuleNotFoundError", text)
+
+    def test_provider_configuration_failures_identify_gate_two(self):
+        for provider in ("litellm", "openai", "bedrock"):
+            text = self.workflow(f"panopticon-pr-{provider}.yml")
+            self.assertIn("Panopticon gate 2 failed: effective provider configuration", text)
+            self.assertIn("Panopticon provider defaults action is missing", text)
 
     def test_legacy_guard_retains_a_self_contained_recovery_fallback(self):
         text = self.workflow("panopticon-pr.yml")

@@ -116,3 +116,45 @@ organization settings. Request budgets are optional and have a documented
 precedence order; see the instance's `docs/provider-configuration.md` for the
 required/optional table, configuration steps, fixed Action contract, and
 recovery commands. Never put credentials or tokens in a default.
+
+## Four-gate rollout checks
+
+When a child workflow fails, record the last gate with green evidence. A later
+gate is not proven until the earlier one passes:
+
+1. **Reusable-workflow access** — for a private or internal instance, read the
+   run-page banner first. Authenticate as an instance administrator with a
+   fine-grained token that has `Administration: Read` and `Contents: Read` on
+   the instance repository, or use a classic PAT with `repo` scope. Check
+   `https://github.com/YOUR-ORG/YOUR-INSTANCE-REPO/settings/actions` and run:
+
+   ```bash
+   INSTANCE='YOUR-ORG/YOUR-INSTANCE-REPO'
+   gh api "repos/${INSTANCE}/actions/permissions/access" --jq '.access_level'
+   ```
+
+   A 403 means the token lacks `Administration: Read`; reauthenticate before
+   interpreting the result. An access level of `none` is an instance policy
+   problem, not proof that the called YAML is missing. After access is allowed,
+   check the selected workflow at the configured ref with the GitHub Contents
+   API using `Contents: Read`.
+2. **Effective provider configuration** — a missing value, missing default, or
+   stale revision belongs to the instance contract or this child caller. Run
+   exactly one provider configuration workflow, then rerun the child bootstrap
+   command it prints. Commit and push regenerated callers before removing old
+   secret names.
+3. **Caller identity and credentials** — reusable workflow code does not
+   transfer identity. GitHub OIDC identifies this child repository, so verify
+   the caller's permissions and register this exact child in the organization's
+   approved identity system. In Bedrock `instance-managed` mode, keep the
+   credential wrapper at
+   `.github/actions/panopticon-aws-credentials/action.yml`; wait for the
+   caller-owned gate-3 summary if it fails or times out.
+4. **Real provider-request compatibility** — a green provider preflight proves
+   credentials and capability, not model request compatibility. Complete one
+   real structured inference. Route unsupported fields, model errors, and
+   request-shape failures to the provider/model owner rather than changing
+   workflow access or IAM.
+
+The full symptom/evidence/owner/recovery/proof table and the exact four-gate
+setup sequence live in the instance's `docs/setup-guide.md`.

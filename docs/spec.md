@@ -78,6 +78,15 @@ manual entrypoints does not
 change the persisted provider schema, effective contract revision, or generated
 child caller.
 
+Operational onboarding follows four gates in order: the instance must allow the
+child to call its reusable workflow, effective provider values must resolve,
+the child caller's identity and credentials must be usable, and one real
+provider request must be accepted. Reusable workflow code does not transfer
+caller identity; GitHub OIDC evaluates the child repository subject, so
+organization-managed credentials may require per-child provisioning. The
+instance setup guide records the authoritative evidence, owner, recovery, and
+proof for each gate.
+
 ## Evaluation and synchronization
 
 Child PR callers invoke the selected LiteLLM, OpenAI, or Bedrock evaluation workflow with
@@ -86,6 +95,12 @@ secret and variable mappings. Provider-neutral checks share prompting,
 validation, correction, reporting,
 and gating behavior; authentication and transport remain inside the provider
 entrypoint.
+
+The Bedrock instance-managed credential action is bounded at the caller step
+boundary. A later caller-owned recovery step runs with an `always()`-style
+condition so failure or timeout guidance survives cancellation inside the
+composite action. Provider preflight confirms credentials and capability only;
+request compatibility is proven by a real structured inference.
 
 Bootstrap also wires a stable, manual child resource-sync caller to a
 template-owned reusable workflow. It refreshes only managed Panopticon skills

@@ -157,11 +157,15 @@ jobs:
                       f"PANOPTICON_INSTANCE='{os.environ['INSTANCE']}' python3"
                   )
                   recovery = (
-                      "## Panopticon: missing LiteLLM configuration\n\n"
-                      + "".join(f"- `{configured_name}` ({logical})\n" for logical, configured_name in missing)
-                      + "\nThe instance configuration or child caller is stale. From inside the child clone run:\n\n"
+                      "## Panopticon gate 2 failed: effective provider configuration\n\n"
+                      "- Provider: `LiteLLM`\n"
+                      "- Expected configured names:\n"
+                      + "".join(f"  - `{configured_name}` ({logical})\n" for logical, configured_name in missing)
+                      + "- Scope: the provider contract is instance-wide; the generated caller mapping is per child.\n"
+                      + "- Evidence: one or more required configured names were absent before provider preflight.\n\n"
+                      + "Fix location: run the matching provider configuration workflow in the instance, or regenerate this child caller if the contract is stale. Then rerun:\n\n"
                       + f"~~~bash\n{command}\n~~~\n\n"
-                      + "Review and commit the generated changes, push them, then rerun or await this PR workflow.\n"
+                      + "Review and commit the generated changes, push them, then rerun or await this child PR workflow. Gate 2 is proven when effective values resolve before provider preflight.\n"
                   )
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
                   summary.write(recovery)
@@ -187,9 +191,11 @@ jobs:
           action="$PANOPTICON_INSTANCE_DIR/.github/actions/panopticon-provider-defaults/action.yml"
           if [ ! -f "$action" ]; then
             {
-              echo "## Panopticon provider defaults action is missing"
+              echo "## Panopticon gate 2 failed: effective provider configuration"
               echo
-              echo "Restore the fixed instance action at \`$action\`, then rerun this workflow."
+              echo "- Expected resource: \`$action\`"
+              echo "- Scope: instance-wide provider defaults"
+              echo "- Fix location: restore the fixed instance action, then rerun this workflow."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Panopticon provider defaults action is missing; see the step summary"
             exit 1
