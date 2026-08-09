@@ -1,6 +1,6 @@
 ---
 name: openspec-apply-change
-description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks. Require exactly one active change: stop when none exist and ask the user to select when multiple exist.
+description: "Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks. Require exactly one active change: stop when none exist and ask the user to select when multiple exist."
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:

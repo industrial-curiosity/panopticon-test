@@ -47,6 +47,8 @@ class TestProviderWorkflows(unittest.TestCase):
             self.assertIn("configuration_revision:", text)
             self.assertIn("configuration_names:", text)
             self.assertIn("timeout-minutes:", text)
+            self.assertIn("configuration_defaults:", text)
+            self.assertIn('default: "{}"', text)
             self.assertIn("Post combined report", text)
             self.assertIn("Apply gating", text)
             self.assertNotIn("secrets: inherit", text)
@@ -100,6 +102,33 @@ class TestProviderWorkflows(unittest.TestCase):
         text = self.workflow("panopticon-pr-bedrock.yml")
         for organization_value in ("YotpoLtd", "402837048690", "YotpoLtd/", "yotpo-api"):
             self.assertNotIn(organization_value, text)
+
+    def test_bedrock_recovery_fallback_matches_shared_recovery_contract(self):
+        text = self.workflow("panopticon-pr-bedrock.yml")
+        for marker in (
+            "docs/examples/panopticon-aws-credentials/action.yml",
+            ".github/actions/panopticon-aws-credentials/action.yml",
+            '"protected_paths": [',
+            "automatically protects this fixed path during template sync",
+            "PANOPTICON_AWS_REGION",
+            "PANOPTICON_INSTANCE='",
+        ):
+            self.assertIn(marker, text)
+
+    def test_public_credential_action_example_is_placeholder_safe(self):
+        example = (ROOT / "docs" / "examples" / "panopticon-aws-credentials" / "action.yml").read_text(encoding="utf-8")
+        for marker in (
+            "using: composite",
+            "organization-broker",
+            "PANOPTICON_AWS_REGION",
+            "aws_region",
+            "Replace this step",
+        ):
+            self.assertIn(marker, example)
+        for organization_value in ("YotpoLtd", "402837048690", "yotpo-api"):
+            self.assertNotIn(organization_value, example)
+        self.assertNotIn("AWS_ACCESS_KEY_ID=", example)
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY=", example)
 
     def test_public_four_gate_guidance_is_self_contained_and_safe(self):
         setup_guide = (ROOT / "docs" / "setup-guide.md").read_text(encoding="utf-8")
@@ -245,6 +274,7 @@ class TestProviderWorkflows(unittest.TestCase):
         for provider in ("litellm", "openai", "bedrock"):
             text = self.workflow(f"configure-panopticon-{provider}.yml")
             self.assertIn(f"provider: {provider}", text)
+            self.assertNotIn("job_timeout_minutes_default", text)
             self.assertNotIn("provider:\n", text.split("inputs:", 1)[1].split("permissions:", 1)[0])
             self.assertIn("contents: write", text)
             self.assertIn("uses: ./.github/actions/configure-panopticon", text)
@@ -272,6 +302,15 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertIn("No credential values were accepted or persisted", text)
         self.assertIn("required organization-level Actions names", text)
         self.assertIn("Optional request-budget variables", text)
+        self.assertIn("optional request-budget variable", text)
+        self.assertIn("Job timeout ", text)
+        self.assertIn("reusable-workflow fallback because", text)
+        self.assertNotIn(
+            "Leave an optional variable empty to use the fixed instance Action",
+            text,
+        )
+        self.assertNotIn("job-timeout-minutes-default", text)
+        self.assertNotIn("JOB_TIMEOUT_MINUTES_DEFAULT", text)
         self.assertIn("git diff --quiet -- panopticon.config.json", text)
         self.assertIn("Configuration already matches", text)
         self.assertIn("could not be pushed", text)
@@ -324,16 +363,51 @@ class TestProviderWorkflows(unittest.TestCase):
     def test_stale_provider_revision_reports_exact_child_recovery(self):
         for provider in ("litellm", "openai", "bedrock"):
             text = self.workflow(f"panopticon-pr-{provider}.yml")
-            self.assertIn("provider configuration revision changed", text)
+            self.assertIn("caller compatibility revision changed", text)
+            self.assertIn(
+                'expected not in {actual["caller_revision"], actual["legacy_revision"]}',
+                text,
+            )
             self.assertIn("from panopticon.recovery import stale_caller_recovery", text)
             self.assertIn("from panopticon.recovery import missing_provider_recovery", text)
             self.assertIn("except ModuleNotFoundError", text)
+
+    def test_legacy_callers_can_dispatch_to_the_revision_gate(self):
+        for provider in ("litellm", "openai", "bedrock"):
+            text = self.workflow(f"panopticon-pr-{provider}.yml")
+            self.assertIn(
+                "configuration_defaults:\n"
+                "        description: Legacy caller mapping retained only for migration; ignored.\n"
+                "        required: false\n"
+                "        type: string\n"
+                "        default: \"{}\"",
+                text,
+            )
+            self.assertIn("default: \"{}\"", text)
+            gate = text.split("- name: Validate provider configuration revision", 1)[1]
+            self.assertIn('actual["legacy_revision"]', gate)
+            self.assertNotIn("inputs.configuration_defaults", gate)
 
     def test_provider_configuration_failures_identify_gate_two(self):
         for provider in ("litellm", "openai", "bedrock"):
             text = self.workflow(f"panopticon-pr-{provider}.yml")
             self.assertIn("Panopticon gate 2 failed: effective provider configuration", text)
             self.assertIn("Panopticon provider defaults action is missing", text)
+
+    def test_bedrock_configuration_exposes_a_non_secret_model_default(self):
+        workflow = self.workflow("configure-panopticon-bedrock.yml")
+        configuration_action = CONFIGURATION_ACTION.read_text(encoding="utf-8")
+        self.assertIn("model_default:", workflow)
+        self.assertIn("model-default: ${{ inputs.model_default }}", workflow)
+        self.assertIn("MODEL_DEFAULT: ${{ inputs.model-default }}", configuration_action)
+        self.assertIn('"model": "MODEL_DEFAULT"', configuration_action)
+        self.assertIn("llm.defaults.model", configuration_action)
+
+    def test_configuration_summary_derives_optionality_without_persisting_it(self):
+        action = CONFIGURATION_ACTION.read_text(encoding="utf-8")
+        self.assertIn("resolve_provider_contract(configured)", action)
+        self.assertIn('contract["optional_variables"]', action)
+        self.assertNotIn('configured["optional_variables"]', action)
 
     def test_legacy_guard_retains_a_self_contained_recovery_fallback(self):
         text = self.workflow("panopticon-pr.yml")

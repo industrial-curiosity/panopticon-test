@@ -51,3 +51,7 @@ simple as possible.
   validation passes. If validation fails, the flag must not exist. Tests that check
   this invariant must confirm the flag is absent on failure and present on success
   in a single test (not two independent tests that can drift).
+- **Test source mutations must take effect.** When a test derives altered source
+  text with replacement, target text that exists in the current source and assert
+  that the derived source differs before executing it; otherwise the test can
+  silently exercise the unmodified path.

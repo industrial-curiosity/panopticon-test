@@ -369,8 +369,9 @@ workflow-defaulted or instance-supplied variables as missing.
   workflow or instance supplies it.
 - The same configuration fails before LLM work when the declared default is
   absent.
-- Changing optionality changes the provider contract revision and produces an
-  exact child-bootstrap recovery command for stale callers.
+- Changing a caller-supplied default changes the caller-compatibility revision
+  and produces an exact child-bootstrap recovery command for affected callers;
+  runtime-only optionality changes preserve compatible existing callers.
 
 #### Step 4 — Fail
 

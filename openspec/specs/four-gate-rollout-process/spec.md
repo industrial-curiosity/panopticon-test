@@ -88,3 +88,34 @@ The public template's setup, getting-started, testing, and recovery guidance MUS
   repository
 - **THEN** they contain no organization-specific identifiers or credential
   values and still provide actionable placeholder UI/API shapes
+
+### Requirement: Gate-1 recovery includes a safe policy mutation command
+
+Public rollout guidance SHALL provide the exact placeholder-safe command
+`gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization`, identify it as a reusable-workflow access-policy mutation requiring administrator permission, and retain the read-only API check and Settings UI alternative.
+
+#### Scenario: Administrator repairs denied organization access
+
+- **WHEN** the access preflight reports that organization callers are not
+  allowed
+- **THEN** the guide provides the mutation command and explains its scope and
+  required administrator permission
+
+### Requirement: Bedrock inference-profile IAM guidance covers both resources
+
+Public Bedrock guidance SHALL state that application inference-profile requests
+need `bedrock:InvokeModel` on both the selected profile ARN and its underlying
+foundation-model ARN, while `bedrock:GetInferenceProfile` remains a separate
+metadata/discovery permission. Examples SHALL use placeholder or synthetic ARNs.
+
+#### Scenario: IAM policy grants an application inference profile
+
+- **WHEN** an organization configures a Bedrock application inference profile
+- **THEN** the guide directs the owner to grant `bedrock:InvokeModel` on the
+  profile ARN and the underlying foundation-model ARN
+
+#### Scenario: Operator diagnoses a profile permission failure
+
+- **WHEN** the profile can be discovered but invocation is denied
+- **THEN** the guide distinguishes `GetInferenceProfile` from invocation and
+  directs the owner to inspect both `InvokeModel` resource entries

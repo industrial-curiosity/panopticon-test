@@ -181,9 +181,11 @@ endpoint and API key.
    child repositories. Copy the subject format from GitHub's current OIDC
    reference rather than guessing it.
 3. Grant that role `bedrock:InvokeModel` on the selected model or
-   inference-profile resources. Converse uses
-   that permission; inference profiles may also require
-   `bedrock:GetInferenceProfile`. See AWS's
+   inference-profile resources. For an application inference profile, grant
+   `bedrock:InvokeModel` on both the selected profile ARN and its underlying
+   foundation-model ARN. Converse uses that permission; retain
+   `bedrock:GetInferenceProfile` separately when the integration discovers or
+   reads profile metadata. See AWS's
    [Bedrock inference
    prerequisites](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-prereq.html).
 4. Put the role ARN and region into the organization variables named by
@@ -193,18 +195,24 @@ endpoint and API key.
 
 ### Bedrock instance-managed credential action checklist
 
-1. Add `.github/actions/panopticon-aws-credentials/action.yml` to the instance
-   repository. This
-   fixed path is deliberate: child repositories cannot select an arbitrary
-   action.
-2. Have the action configure AWS credentials using your organization's approved
-   mechanism.
-3. Have the action write the selected region to `$GITHUB_ENV`, for example
-   `echo "PANOPTICON_AWS_REGION=us-east-1" >> "$GITHUB_ENV"`.
+1. Copy the reviewed [credential-action example](examples/panopticon-aws-credentials/action.yml)
+   to `.github/actions/panopticon-aws-credentials/action.yml`. This fixed path
+   is deliberate: child repositories cannot select an arbitrary action.
+2. Replace only the example's organization broker step with the approved
+   organization mechanism. The action runs for the child caller identity and
+   accepts no credential value through Panopticon configuration.
+3. Have the action write the selected region to `$GITHUB_ENV` as
+   `PANOPTICON_AWS_REGION` and preserve the example's `aws_region` output
+   contract. Verify that output before committing the action.
 4. Select `instance-managed` in **Configure Panopticon — Bedrock**. Do not
    create
    `PANOPTICON_AWS_REGION` or `PANOPTICON_AWS_ROLE_ARN` solely for Panopticon in
    this mode.
+
+When the trusted provider contract selects Bedrock `instance-managed`, template
+sync automatically protects the fixed credential-action path with the runtime
+`merge.ours` driver. Add that path to `protected_paths` only when documenting a
+separate custom instance file.
 
 For an existing instance, sync the template to replace the generic configuration
 workflow with all three provider-specific entrypoints. An already configured
@@ -215,7 +223,9 @@ bootstrap in every child. Review, commit, and push each generated caller change
 before removing old secret names or workflow versions. If the instance-token
 secret name changes, keep the old secret available until every child caller has
 been regenerated; removing it early can prevent instance checkout before the
-workflow can diagnose a stale revision.
+workflow can diagnose a stale caller-compatibility revision. Runtime-only
+provider behavior changes, such as adding an optional effective-value source,
+do not require child bootstrap.
 
 ### Four-gate rollout and troubleshooting
 
@@ -228,7 +238,7 @@ workflow, not that the YAML is missing or invalid.
 | Gate | Observable symptom | Authoritative evidence | Owner and scope | Exact recovery | Proof before advancing |
 | --- | --- | --- | --- | --- | --- |
 | 1. Reusable-workflow access | Zero jobs, `workflow was not found`, or an access/parse banner before any job starts | The run-page banner; the instance Actions access API; then the selected workflow contents API at the configured ref | Instance administrator; normally instance-wide for the allowed organization, with a separate child repository check | Set the instance's **Settings → Actions → General → Access** policy to allow the intended organization or enterprise callers. Do not edit YAML until the access check allows it. | The access endpoint reports an allowed level and the contents lookup returns the selected workflow path at the configured ref. |
-| 2. Effective provider configuration | `missing ... configuration`, missing default, invalid configured name, or stale configuration revision | The completed provider-configuration workflow, committed `panopticon.config.json`, generated caller's contract comments, and the `Resolve effective provider values` step summary | Instance owner for names/defaults; child owner when its caller is stale | Run exactly one provider configuration workflow above with names only. If the caller is stale, run the child bootstrap command below, review/commit/push the generated caller, and keep old secret names until all children are regenerated. | The configuration run is green, the contract revision in the caller matches the instance, and effective values resolve before provider preflight without exposing values. |
+| 2. Effective provider configuration | `missing ... configuration`, missing default, invalid configured name, or stale caller-compatibility revision | The completed provider-configuration workflow, committed `panopticon.config.json`, generated caller's contract comments, and the `Resolve effective provider values` step summary | Instance owner for names/defaults; child owner when its caller is stale | Run exactly one provider configuration workflow above with names only. If the caller is stale, run the child bootstrap command below, review/commit/push the generated caller, and keep old secret names until all affected children are regenerated. | The configuration run is green, the caller-compatibility revision matches the instance or its accepted legacy revision, and effective values resolve before provider preflight without exposing values. |
 | 3. Caller-repository identity and credentials | `id-token` permission errors, OIDC trust denial, `AssumeRoleWithWebIdentity` errors, missing credentials, or a credential wrapper timeout | The credential-step outcome and summary, the child caller's `permissions` block, and `aws sts get-caller-identity` from the caller job | Per child for identity registration and trust; instance owner for the fixed credential action and its configured names | Register the exact child repository in the organization's approved identity system; verify the caller grants `id-token: write` where required; keep instance-managed credentials at `.github/actions/panopticon-aws-credentials/action.yml`. Use the organization's equivalent of `your-org-identity-tool register --repository 'YOUR-ORG/YOUR-CHILD-REPO'`. | The credential step and caller identity check succeed, and the summary identifies the child caller before provider preflight. |
 | 4. Real provider-request compatibility | Credentials and preflight pass, then a real structured request fails with a model, request-shape, unsupported-control, or provider API error | The provider request error and the exact selected model/request shape; never infer this gate from credentials-only preflight | Provider adapter/model owner, with the instance owner responsible for the configured model name | Correct the selected model or adapter request shape, then rerun the same real structured inference through the provider workflow. Do not change IAM or workflow access for a request-shape error. | One real structured inference completes with the rollout model; capability preflight alone is not sufficient proof. |
 
@@ -261,6 +271,18 @@ zero-job banner as evidence that the called workflow is absent. If access is
 allowed but the contents call fails, confirm `Contents: Read`, inspect the
 exact ref and path, and then run the workflow-contract validator against the
 instance copy.
+
+If the read-only check reports `none`, an instance administrator can apply the
+policy mutation below. It changes the instance's reusable-workflow access
+policy and requires an administrator token with the documented administration
+permission; it is not an automated Panopticon step:
+
+```bash
+gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization
+```
+
+Operators who only have read access can use the read-only check and the
+Settings UI path above instead.
 
 The generated caller runs in the child repository's security context. Reusable
 workflow code does not transfer repository identity: for GitHub OIDC, the

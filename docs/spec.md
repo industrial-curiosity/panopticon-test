@@ -61,13 +61,18 @@ not expose, persist, or forward an endpoint variable. LiteLLM remains the
 provider for a configurable OpenAI-compatible endpoint.
 
 Provider contracts distinguish required values from optional request-budget
-values. Required credentials, model identity, repository access, LiteLLM
-endpoint, and applicable Bedrock identity settings come from organization
-Actions configuration. Runtime budgets resolve in order from an organization
+values. Required credentials, repository access, LiteLLM endpoint, and
+applicable Bedrock identity settings come from organization Actions
+configuration. LiteLLM and OpenAI model identity is required; Bedrock model
+identity is optional for prerequisite reporting and resolves from the
+organization variable or the non-secret `llm.defaults.model` instance default,
+with the organization variable taking precedence. The public template does not
+select a universal Bedrock model. Runtime budgets resolve in order from an organization
 variable, the fixed instance default Action, a non-secret instance-configured
 default, then the template workflow default. Job timeout is resolved in the
-generated caller from an organization variable, instance-configured default, or
-template default because GitHub determines it before an Action can run. The
+generated caller from an organization variable or reusable-workflow default
+because GitHub determines it before an Action can run; instance-level timeout
+defaults are not embedded in callers. The
 workflow summary and initialization report expose only each value's source
 label, never its value.
 
@@ -75,8 +80,40 @@ Provider configuration selects trusted reusable PR workflow paths and canonical
 input mappings; it cannot
 inject an arbitrary repository, workflow, action, or command. Splitting the
 manual entrypoints does not
-change the persisted provider schema, effective contract revision, or generated
-child caller.
+change the persisted provider schema or trusted workflow paths. Generated
+callers embed a caller-compatibility revision owned by the caller renderer. It
+hashes the semantic reusable-workflow target, caller permissions, configured
+names, credential mode, and caller-passed values. Instance-resolved operational
+defaults and the Bedrock model are runtime-only when callers pass organization
+variable expressions; cosmetic generated comments do not make them caller
+inputs. The reusable workflow owns
+the pre-job timeout fallback, so changing that default is runtime-only and does
+not invalidate existing callers. Runtime-only provider behavior changes do not
+invalidate an existing caller; changes to that rendered compatibility
+surface do. Changes to only effective values do not require bootstrap, and a
+reusable-workflow fallback is preferred when it can preserve the caller ABI.
+During the migration window, provider workflows retain an optional
+`configuration_defaults` input with default `{}` and ignore it so pre-change
+callers dispatch and reach the legacy compatibility gate; newly generated
+callers omit the input. A genuinely incompatible caller receives a clear
+instruction to rerun bootstrap.
+Instance administrators control the job timeout through the mapped organization
+Actions variable; legacy instance job-timeout defaults are migration-only and
+are not a live source or a caller input.
+Bootstrap and local sync load the caller renderer from the effective
+`workflow_ref`, so a pinned caller is rendered and fingerprinted by the same
+instance revision that validates it; default-branch tooling refreshes remain
+independent of that caller contract.
+Bootstrap may use its bundled renderer only when the instance caller file is
+missing (404) or retrieval exhausts connection retries; authentication and
+other API failures stop bootstrap before managed child writes.
+The trusted provider contract's full-contract `revision` remains available for
+diagnostics and migration checks; it is not the caller-staleness key. Provider
+workflows validate the semantic `caller_revision` value through the existing
+`configuration_revision` wire input, whose name is retained to preserve every
+generated caller's ABI. They accept `legacy_revision` during the compatibility
+migration. A stale value reports `caller compatibility revision changed` and
+directs the child maintainer to bootstrap again.
 
 Operational onboarding follows four gates in order: the instance must allow the
 child to call its reusable workflow, effective provider values must resolve,
@@ -108,12 +145,12 @@ vendored tooling and managed workflow callers, uses the instance token only for
 that read, and opens or updates an open child-repository pull request for review
 when resources changed. Once a resource-sync pull request is merged or closed,
 the next changed sync creates a new pull request. Local sync derives caller
-workflows from the instance's current provider configuration so older children
-can acquire newly managed callers without re-running bootstrap. It also
-downloads the instance-owned versioned, data-only child-safe local-tooling
-manifest on every run, then refreshes only the listed modules. CI-only runtime
-modules and child-owned files outside that manifest are not managed by local
-sync. It reports those unmanaged Python modules as instance-excluded or
+workflows from the effective `workflow_ref` so older children can acquire newly
+managed callers without re-running bootstrap. It also downloads the
+instance-owned versioned, data-only child-safe local-tooling manifest on every
+run, then refreshes only the listed modules. CI-only runtime modules and
+child-owned files outside that manifest are not managed by local sync. It
+reports those unmanaged Python modules as instance-excluded or
 child-only advisory candidates for reviewed removal, without changing them.
 
 The documentation-drift check first classifies the PR diff. Documentation,
@@ -141,8 +178,14 @@ with the validated child Mermaid architecture diagram in its maintained report
 comment. Interface-conflict gating defaults to the instance configuration but
 may be overridden by the child repository's committed
 `panopticon/config.json`; both advisory and blocking modes warn prominently,
-while only blocking fails the check. Instance template syncs preserve declared instance-owned paths and
-report the failing stage and recovery action when they cannot complete.
+while only blocking fails the check. Instance template syncs preserve declared
+instance-owned paths and automatically derive the fixed
+`.github/actions/panopticon-aws-credentials/action.yml` path when the raw
+instance contract selects Bedrock `instance-managed`. The derived path is
+written to runtime `merge.ours` attributes and reported separately from
+organization-declared paths. Recovery text links to the reviewed credential
+example and gives the same derivation for local repair. Syncs report the failing
+stage and recovery action when they cannot complete.
 
 ## Architecture diagram links
 

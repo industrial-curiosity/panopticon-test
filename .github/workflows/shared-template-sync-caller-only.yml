@@ -34,9 +34,9 @@ jobs:
           import sys
 
           sys.path.insert(0, ".")
-          from panopticon.config import load_org_config
+          from panopticon.config import derive_protected_paths, load_org_config
 
-          paths = dict.fromkeys(("docs/architecture.md", *load_org_config(".")["protected_paths"]))
+          paths = derive_protected_paths(load_org_config("."))
           attributes = Path(".git/info/attributes")
           attributes.parent.mkdir(parents=True, exist_ok=True)
           attributes.write_text("".join(f"{path} merge=ours\n" for path in paths), encoding="utf-8")
@@ -110,12 +110,19 @@ jobs:
           from pathlib import Path
 
           sys.path.insert(0, ".")
-          from panopticon.config import load_org_config
+          from panopticon.config import (
+              derive_protected_path_groups,
+              derive_protected_paths,
+              load_org_config,
+          )
 
           try:
-              generated_paths = ("docs/architecture.md",)
-              protected_paths = load_org_config(".")["protected_paths"]
-              attributed_paths = dict.fromkeys((*generated_paths, *protected_paths))
+              org_config = load_org_config(".")
+              groups = derive_protected_path_groups(org_config)
+              generated_paths = groups["generated"]
+              provider_paths = groups["provider"]
+              protected_paths = groups["organization"]
+              attributed_paths = derive_protected_paths(org_config)
 
               attrs_path = Path(".git/info/attributes")
               attrs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -138,6 +145,17 @@ jobs:
               )
               for path in generated_paths:
                   handle.write(f"- `{path}`\n")
+
+              handle.write("\n## Provider-derived protected paths\n\n")
+              if provider_paths:
+                  handle.write(
+                      "The trusted provider contract automatically protects these "
+                      "instance-owned paths:\n\n"
+                  )
+                  for path in provider_paths:
+                      handle.write(f"- `{path}`\n")
+              else:
+                  handle.write("No trusted provider-derived paths declared for this instance.\n")
 
               handle.write("\n## Org-declared protected paths\n\n")
               if protected_paths:

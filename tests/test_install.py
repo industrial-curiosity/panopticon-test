@@ -46,6 +46,7 @@ from panopticon.bootstrap import (
     write_local_tooling_gitignore,
 )
 from panopticon.bootstrap import main as bootstrap_main
+from panopticon.callers import caller_compatibility_revision
 from panopticon.providers import resolve_provider_contract
 
 
@@ -88,24 +89,36 @@ class TestCallerWorkflowText(unittest.TestCase):
         self.assertIn("uses: acme/instance/.github/workflows/panopticon-pr-litellm.yml@v1", text)
         self.assertNotIn("secrets: inherit", text)
         self.assertIn("api_key: ${{ secrets.PANOPTICON_LLM_API_KEY }}", text)
-        self.assertIn(f"configuration_revision: {LITELLM_CONTRACT['revision']}", text)
+        self.assertIn(f"configuration_revision: {LITELLM_CONTRACT['caller_revision']}", text)
+        self.assertEqual(
+            caller_compatibility_revision(LITELLM_CONTRACT), LITELLM_CONTRACT["caller_revision"]
+        )
         self.assertIn('configuration_names: \'{"api_key":"PANOPTICON_LLM_API_KEY"', text)
-        self.assertIn('configuration_defaults: "{}"', text)
-        self.assertIn("job_timeout_minutes: ${{ vars.PANOPTICON_LLM_JOB_TIMEOUT_MINUTES || '20' }}", text)
+        self.assertNotIn("configuration_defaults:", text)
+        self.assertIn("job_timeout_minutes: ${{ vars.PANOPTICON_LLM_JOB_TIMEOUT_MINUTES }}", text)
         self.assertIn(
             "job_timeout_source: ${{ vars.PANOPTICON_LLM_JOB_TIMEOUT_MINUTES && "
             "'organization variable' || 'workflow default' }}",
             text,
         )
 
-    def test_pr_caller_embeds_a_validated_instance_job_timeout_default(self):
+    def test_pr_caller_does_not_embed_an_instance_job_timeout_default(self):
         contract = resolve_provider_contract(
             {"provider": "openai", "defaults": {"job_timeout_minutes": "25"}}
         )
         text = caller_workflow_text("panopticon-pr.yml", "acme/instance", "v1", contract)
-        self.assertIn('configuration_defaults: "{\\"job_timeout_minutes\\": \\"25\\"}"', text)
-        self.assertIn("job_timeout_minutes: ${{ vars.PANOPTICON_LLM_JOB_TIMEOUT_MINUTES || '25' }}", text)
-        self.assertIn("'organization variable' || 'instance config'", text)
+        self.assertNotIn("configuration_defaults:", text)
+        self.assertIn("job_timeout_minutes: ${{ vars.PANOPTICON_LLM_JOB_TIMEOUT_MINUTES }}", text)
+        self.assertIn("'organization variable' || 'workflow default'", text)
+
+    def test_bedrock_pr_caller_maps_optional_model_and_instance_default(self):
+        contract = resolve_provider_contract(
+            {"provider": "bedrock", "defaults": {"model": "amazon.synthetic-model"}}
+        )
+        text = caller_workflow_text("panopticon-pr.yml", "acme/instance", "v1", contract)
+        self.assertIn('"model"', text.split("# Optional provider variables:", 1)[1])
+        self.assertNotIn("configuration_defaults:", text)
+        self.assertIn("model: ${{ vars.PANOPTICON_LLM_MODEL }}", text)
 
     def test_openai_pr_workflow_does_not_map_an_endpoint_variable(self):
         contract = resolve_provider_contract({"provider": "openai"})
@@ -723,11 +736,16 @@ class TestApiGetRetry(unittest.TestCase):
 # ── workflow_ref default resolution (main) ─────────────────────────────────────
 
 class TestMainWorkflowRefDefault(unittest.TestCase):
-    def _router(self, org_config_content=None, secrets=ORG_SECRETS, variables=ORG_VARS):
+    def _router(
+        self, org_config_content=None, secrets=ORG_SECRETS, variables=ORG_VARS,
+        caller_response=None, caller_fetch_error=None, caller_fetch_error_attempts=1,
+    ):
         from urllib.error import HTTPError
         requests = []
+        caller_fetch_attempts = 0
 
         def urlopen(request, timeout=30):
+            nonlocal caller_fetch_attempts
             url = request.full_url
             requests.append(url)
             if "contents/panopticon.config.json" in url:
@@ -740,11 +758,22 @@ class TestMainWorkflowRefDefault(unittest.TestCase):
                         {"tree": [_tree_entry(".github/workflows/panopticon-pr-litellm.yml")]}
                     ).encode()
                 )
+            if "contents/panopticon/callers.py" in url and caller_response is not None:
+                return BytesIO(json.dumps(caller_response).encode())
+            if "contents/panopticon/callers.py" in url and caller_fetch_error is not None:
+                caller_fetch_attempts += 1
+                if caller_fetch_attempts <= caller_fetch_error_attempts:
+                    raise caller_fetch_error() if callable(caller_fetch_error) else caller_fetch_error
             if f"contents/{LOCAL_TOOLING_MANIFEST_PATH}" in url:
                 return BytesIO(json.dumps(_file_response(LOCAL_TOOLING_MANIFEST)).encode())
             for name in LOCAL_TOOLING_MODULES:
                 if f"/contents/panopticon/{name}" in url:
-                    return BytesIO(json.dumps(_file_response(f"# {name}".encode())).encode())
+                    content = (
+                        Path("panopticon/callers.py").read_bytes()
+                        if name == "callers.py"
+                        else f"# {name}".encode()
+                    )
+                    return BytesIO(json.dumps(_file_response(content)).encode())
             if f"contents/{GETTING_STARTED_GUIDE}" in url:
                 return BytesIO(json.dumps(_file_response(b"# Panopticon")).encode())
             if "actions/secrets" in url:
@@ -755,6 +784,79 @@ class TestMainWorkflowRefDefault(unittest.TestCase):
 
         urlopen.requests = requests
         return urlopen
+
+    def test_unavailable_caller_renderer_uses_bundled_workflow_tuple(self):
+        from urllib.error import HTTPError
+
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_fetch_error=lambda: HTTPError(
+                "https://api.github.com/callers.py", 404, "Not Found", {}, BytesIO(b"missing")
+            ),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            names = {
+                path.name for path in (Path(tmp) / ".github" / "workflows").iterdir()
+            }
+        self.assertEqual(code, 0)
+        self.assertEqual(names, set(CALLER_WORKFLOWS))
+        self.assertIn("using bundled caller renderer (fallback)", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_connection_failure_uses_bundled_caller_renderer(self):
+        from urllib.error import URLError
+
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_fetch_error=URLError("connection reset"),
+            caller_fetch_error_attempts=3,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+        self.assertEqual(code, 0)
+        self.assertIn("using bundled caller renderer (fallback)", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_caller_renderer_auth_failure_does_not_use_bundled_renderer(self):
+        from urllib.error import HTTPError
+
+        for status in (401, 403):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                router = self._router(
+                    org_config_content=b'{"llm": {"provider": "litellm"}}',
+                    caller_fetch_error=lambda status=status: HTTPError(
+                        "https://api.github.com/callers.py",
+                        status,
+                        "Forbidden",
+                        {},
+                        BytesIO(b"denied"),
+                    ),
+                )
+                out = StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = bootstrap_main(
+                        env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                        child_root=tmp,
+                        urlopen=router,
+                    )
+                self.assertEqual(code, 1)
+                self.assertEqual(list(Path(tmp).iterdir()), [])
+                self.assertIn("could not load instance caller renderer", out.getvalue())
+                self.assertNotIn("using bundled caller renderer (fallback)", out.getvalue())
+                self.assertNotIn("Traceback", out.getvalue())
 
     def test_no_org_config_fails_before_writing_with_complete_remediation(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -810,6 +912,130 @@ class TestMainWorkflowRefDefault(unittest.TestCase):
                 for request in router.requests
             )
         )
+        self.assertTrue(
+            any("contents/panopticon/callers.py?ref=v2" in request for request in router.requests)
+        )
+
+    def test_invalid_caller_encoding_fails_without_traceback_or_writes(self):
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response={"encoding": "utf-8", "content": "not base64"},
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_syntax_invalid_caller_fails_without_traceback_or_writes(self):
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response=_file_response(b"def broken(:\n"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_execution_invalid_caller_fails_without_traceback_or_writes(self):
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response=_file_response(b"raise NameError('broken renderer')\n"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_missing_caller_renderer_symbol_fails_without_traceback_or_writes(self):
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response=_file_response(b"CALLER_WORKFLOWS = ()\n"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_non_callable_caller_revision_fails_without_traceback_or_writes(self):
+        source = (
+            b"CALLER_WORKFLOWS = ('panopticon-pr.yml',)\n"
+            b"caller_compatibility_revision = None\n"
+            b"def caller_workflow_text(*args):\n"
+            b"    return ''\n"
+        )
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response=_file_response(source),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
+
+    def test_caller_workflow_render_failure_fails_without_traceback_or_writes(self):
+        source = (
+            b"CALLER_WORKFLOWS = ('panopticon-pr.yml',)\n"
+            b"def caller_compatibility_revision(contract):\n"
+            b"    return 'revision'\n"
+            b"def caller_workflow_text(*args):\n"
+            b"    raise ValueError('workflow renderer')\n"
+        )
+        router = self._router(
+            org_config_content=b'{"llm": {"provider": "litellm"}}',
+            caller_response=_file_response(source),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = bootstrap_main(
+                    env={"PANOPTICON_INSTANCE": "acme/instance", "GH_TOKEN": "tok"},
+                    child_root=tmp,
+                    urlopen=router,
+                )
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+        self.assertEqual(code, 1)
+        self.assertIn("could not load instance caller renderer", out.getvalue())
+        self.assertNotIn("Traceback", out.getvalue())
 
 
 class TestProviderBootstrapErrors(unittest.TestCase):
@@ -898,6 +1124,10 @@ class TestProviderBootstrapErrors(unittest.TestCase):
                         )
                     ).encode()
                 )
+            if "contents/panopticon/callers.py" in url:
+                return BytesIO(json.dumps(_file_response(
+                    Path("panopticon/callers.py").read_bytes()
+                )).encode())
             if "git/trees/release/2026-07" in url:
                 return BytesIO(
                     json.dumps(
@@ -1155,7 +1385,12 @@ class TestMainSkillsLocationFlow(unittest.TestCase):
                 return BytesIO(json.dumps(_file_response(LOCAL_TOOLING_MANIFEST)).encode())
             for name in LOCAL_TOOLING_MODULES:
                 if f"/contents/panopticon/{name}" in url:
-                    return BytesIO(json.dumps(_file_response(f"# {name}".encode())).encode())
+                    content = (
+                        Path("panopticon/callers.py").read_bytes()
+                        if name == "callers.py"
+                        else f"# {name}".encode()
+                    )
+                    return BytesIO(json.dumps(_file_response(content)).encode())
             if f"contents/{GETTING_STARTED_GUIDE}" in url:
                 return BytesIO(json.dumps(_file_response(b"# Panopticon")).encode())
             if "actions/secrets" in url:

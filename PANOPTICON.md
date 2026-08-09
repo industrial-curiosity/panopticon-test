@@ -111,8 +111,10 @@ acting on that warning is at your discretion.
 
 ## Provider configuration defaults
 
-Provider credentials, model identity, and repository access are required
-organization settings. Request budgets are optional and have a documented
+Provider credentials and repository access are required organization settings.
+LiteLLM and OpenAI model identity remains required; Bedrock model identity may
+come from its organization variable or the non-secret instance default
+`llm.defaults.model`. Request budgets are optional and have a documented
 precedence order; see the instance's `docs/provider-configuration.md` for the
 required/optional table, configuration steps, fixed Action contract, and
 recovery commands. Never put credentials or tokens in a default.
@@ -138,18 +140,29 @@ gate is not proven until the earlier one passes:
    problem, not proof that the called YAML is missing. After access is allowed,
    check the selected workflow at the configured ref with the GitHub Contents
    API using `Contents: Read`.
+
+   An instance administrator can repair a denied organization policy with this
+   explicit mutation (it requires the documented administrator permission):
+
+   ```bash
+   gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization
+   ```
+
 2. **Effective provider configuration** — a missing value, missing default, or
-   stale revision belongs to the instance contract or this child caller. Run
-   exactly one provider configuration workflow, then rerun the child bootstrap
-   command it prints. Commit and push regenerated callers before removing old
-   secret names.
+   stale caller-compatibility revision belongs to the instance contract or this
+   child caller. Run exactly one provider configuration workflow, then rerun the
+   child bootstrap command it prints only when the caller-visible configuration
+   changed. Commit and push regenerated callers before removing old secret
+   names.
 3. **Caller identity and credentials** — reusable workflow code does not
    transfer identity. GitHub OIDC identifies this child repository, so verify
    the caller's permissions and register this exact child in the organization's
    approved identity system. In Bedrock `instance-managed` mode, keep the
    credential wrapper at
-   `.github/actions/panopticon-aws-credentials/action.yml`; wait for the
-   caller-owned gate-3 summary if it fails or times out.
+   `.github/actions/panopticon-aws-credentials/action.yml`. Copy the reviewed
+   example from `docs/examples/panopticon-aws-credentials/action.yml`, replace
+   only the organization broker step, and wait for the caller-owned gate-3 summary
+   if it fails or times out.
 4. **Real provider-request compatibility** — a green provider preflight proves
    credentials and capability, not model request compatibility. Complete one
    real structured inference. Route unsupported fields, model errors, and

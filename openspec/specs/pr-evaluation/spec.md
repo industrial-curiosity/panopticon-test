@@ -640,3 +640,26 @@ outcome SHALL fail the conflict check.
   `interface-conflict` as `blocking`
 - **THEN** a detected deterministic conflict produces the prominent warning and
   fails the conflict check
+
+### Requirement: Missing instance-managed credential recovery is copyable
+
+The Bedrock provider workflow SHALL identify the fixed credential-action path,
+link the public credential-action example, show a copyable `protected_paths`
+fragment for other custom instance files, and provide the child-bootstrap
+rerun command when the instance-managed action fails. The recovery SHALL state
+that valid Bedrock `instance-managed` configuration protects the fixed path
+automatically during template sync and SHALL never request or print credential
+values.
+
+#### Scenario: Fixed action is absent
+
+- **WHEN** a Bedrock `instance-managed` run cannot find the fixed action
+- **THEN** the step summary provides the example link, exact destination path,
+  protection guidance, and child-bootstrap command
+
+#### Scenario: Shared recovery formatter cannot be imported
+
+- **WHEN** caller-side failure reporting runs before the shared formatter is
+  importable
+- **THEN** the inline fallback contains the same path, example, protection,
+  and rerun guidance

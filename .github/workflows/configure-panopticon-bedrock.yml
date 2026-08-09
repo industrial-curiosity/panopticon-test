@@ -20,6 +20,10 @@ on:
         description: Organization variable name for the Bedrock model (value example anthropic.claude-3-5-sonnet)
         required: false
         default: PANOPTICON_LLM_MODEL
+      model_default:
+        description: Optional non-secret Bedrock model identifier used when the organization variable is empty (example anthropic.claude-3-5-sonnet)
+        required: false
+        default: ""
       aws_region_variable_name:
         description: GitHub-OIDC AWS region variable name (value example us-east-1; ignored for instance-managed)
         required: false
@@ -58,10 +62,6 @@ on:
         description: Optional non-secret correction-attempt value used when the organization variable is absent (example 2)
         required: false
         default: ""
-      job_timeout_minutes_default:
-        description: Optional non-secret job-timeout value used when the organization variable is absent (example 20)
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -84,6 +84,7 @@ jobs:
           credential-mode: ${{ inputs.credential_mode }}
           instance-token-name: ${{ inputs.instance_token_name }}
           model-variable-name: ${{ inputs.model_variable_name }}
+          model-default: ${{ inputs.model_default }}
           aws-region-variable-name: ${{ inputs.aws_region_variable_name }}
           aws-role-arn-variable-name: ${{ inputs.aws_role_arn_variable_name }}
           timeout-seconds-variable-name: ${{ inputs.timeout_seconds_variable_name }}
@@ -93,5 +94,4 @@ jobs:
           timeout-seconds-default: ${{ inputs.timeout_seconds_default }}
           max-attempts-default: ${{ inputs.max_attempts_default }}
           max-correction-attempts-default: ${{ inputs.max_correction_attempts_default }}
-          job-timeout-minutes-default: ${{ inputs.job_timeout_minutes_default }}
           target-branch: ${{ github.ref_name }}

@@ -3,7 +3,8 @@
 # Lives in the instance repo (a copy of this template); child repos call it via a thin caller
 # written by the bootstrap installer with explicit secret and variable mappings.
 # Org-level variables for github-oidc: PANOPTICON_AWS_REGION, PANOPTICON_AWS_ROLE_ARN.
-# Both credential modes use: PANOPTICON_LLM_MODEL,
+# Both credential modes may use PANOPTICON_LLM_MODEL; Bedrock can resolve it from
+# the non-secret instance default `llm.defaults.model` when that variable is empty.
 # PANOPTICON_LLM_TIMEOUT_SECONDS, PANOPTICON_LLM_MAX_ATTEMPTS,
 # PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS, PANOPTICON_LLM_JOB_TIMEOUT_MINUTES. Optional request
 # budgets resolve after instance checkout: org variable → fixed instance action → instance config
@@ -32,6 +33,7 @@ on:
         required: true
         type: string
       configuration_defaults:
+        description: Legacy caller mapping retained only for migration; ignored.
         required: false
         type: string
         default: "{}"
@@ -158,7 +160,7 @@ jobs:
                   summary.write("- Fix location: select `github-oidc` or `instance-managed` in the instance provider configuration, then rerun this workflow.\n")
               print(f"::error::{reason}; see the step summary")
               raise SystemExit(1)
-          required = {"model": "PANOPTICON_LLM_MODEL", "instance_token": "PANOPTICON_INSTANCE_TOKEN"}
+          required = {"instance_token": "PANOPTICON_INSTANCE_TOKEN"}
           if mode == "github-oidc":
               required.update({"aws_region": "PANOPTICON_AWS_REGION", "aws_role_arn": "PANOPTICON_AWS_ROLE_ARN"})
           configured_names = json.loads(os.environ["CONFIGURATION_NAMES"])
@@ -264,6 +266,16 @@ jobs:
           try:
               from panopticon.recovery import credential_action_recovery
           except ImportError:
+              example_url = (
+                  "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
+                  "docs/examples/panopticon-aws-credentials/action.yml"
+              )
+              action_path = ".github/actions/panopticon-aws-credentials/action.yml"
+              protected_paths_fragment = (
+                  '"protected_paths": [\n'
+                  f'    "{action_path}"\n'
+                  "  ]"
+              )
               command = (
                   "curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/"
                   "panopticon-ay-eye/main/install.py | "
@@ -277,7 +289,16 @@ jobs:
                       f"- Caller repository: `{os.environ['CHILD_REPOSITORY']}`",
                       "- Scope: credential registration is per child; the fixed action is instance-owned.",
                       "",
-                      "Register this exact child repository in the organization's approved identity system, verify the caller grants `id-token: write`, then run:",
+                      "Register this exact child repository in the organization's approved identity system, then copy the reviewed example:",
+                      f"{example_url}",
+                      f"to `{action_path}` and replace only the organization broker step.",
+                      "The broker must write `PANOPTICON_AWS_REGION` to `GITHUB_ENV`.",
+                      "A valid `instance-managed` contract automatically protects this fixed path during template sync. For other custom instance files, use:",
+                      "",
+                      "~~~json",
+                      protected_paths_fragment,
+                      "~~~",
+                      "Then verify the caller grants `id-token: write` where required and run:",
                       "",
                       "~~~bash",
                       command,
@@ -390,16 +411,17 @@ jobs:
           import sys
           sys.path.insert(0, str(root))
 
+          # The checkout is at workflow_ref, so its callers.py is the renderer paired with this workflow.
           from panopticon.config import load_org_config, provider_contract
 
-          actual = provider_contract(load_org_config(root))["revision"]
+          actual = provider_contract(load_org_config(root))
           expected = os.environ["EXPECTED_REVISION"]
-          if actual != expected:
+          if expected not in {actual["caller_revision"], actual["legacy_revision"]}:
               from panopticon.recovery import stale_caller_recovery
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
                   summary.write(stale_caller_recovery(os.environ["INSTANCE"]))
               raise SystemExit(
-                  "::error::Panopticon provider configuration revision changed; "
+                  "::error::Panopticon caller compatibility revision changed; "
                   "see the step summary for the exact child-bootstrap command"
               )
 
@@ -452,12 +474,8 @@ jobs:
       - name: Doc-drift check
         id: drift
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e
@@ -481,12 +499,8 @@ jobs:
       - name: Index-currency check
         id: currency
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e
@@ -567,12 +581,8 @@ jobs:
       - name: Interface candidate analysis (advisory)
         id: matching
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e

@@ -431,3 +431,100 @@ configuration mutation.
 - **THEN** GitHub Actions allows at most one configuration mutation to run at
   once rather than letting both
   build commits from the same instance state
+
+### Requirement: Bedrock model may use a non-secret instance default
+
+The trusted Bedrock provider contract SHALL classify `model` as optional for
+organization Actions-variable prerequisite reporting while preserving the
+configured organization variable name. Its effective value SHALL resolve from
+the non-empty organization variable first, then the non-secret
+`llm.defaults.model` instance default. The public template SHALL NOT provide a
+universal Bedrock model default. When both sources are empty, configuration
+SHALL fail before provider preflight and identify the logical name and checked
+sources without printing either value.
+
+#### Scenario: Bedrock model comes from instance configuration
+
+- **WHEN** the Bedrock organization model variable is empty and
+  `llm.defaults.model` contains a model identifier
+- **THEN** the provider workflow uses the instance default, reports
+  `instance config` as its source, and does not report the model variable as a
+  required prerequisite
+
+#### Scenario: Bedrock organization model wins
+
+- **WHEN** both the configured organization model variable and
+  `llm.defaults.model` contain non-empty values
+- **THEN** the provider workflow uses the organization variable and reports
+  `organization variable` as the source
+
+### Requirement: Bedrock configuration accepts `model_default`
+
+The Bedrock configuration workflow SHALL expose an optional non-secret
+`model_default` dispatch value, pass it through the shared configuration action,
+and persist it only as `llm.defaults.model` when non-empty. It SHALL continue
+to accept the model Actions-name input and SHALL accept no credential values.
+
+#### Scenario: Blank Bedrock model default
+
+- **WHEN** `model_default` is blank
+- **THEN** the persisted contract contains no model default and leaves model
+  resolution to the organization variable or a later configuration update
+
+### Requirement: Caller compatibility revisions avoid runtime-only provider churn
+
+The generated-caller renderer SHALL own a canonical, semantic compatibility
+payload containing only the contract values that alter the invoked reusable
+workflow, its caller permissions, or its supplied inputs and secrets. The
+caller-staleness revision SHALL be the hash of that payload. Provider-contract
+fields that the renderer does not consume, including optional-value
+classification, effective-value source resolution, dependencies, and template
+defaults, SHALL NOT make an existing caller stale. The provider-contract
+resolver SHALL NOT maintain a separate manually curated list of
+caller-compatibility fields.
+
+A caller ABI change that adds or changes a required reusable-workflow input,
+secret mapping, permission, credential mode, workflow target, or
+caller-supplied default SHALL change the compatibility payload and require
+regeneration. Provider workflows SHALL accept the legacy revision for an
+otherwise compatible caller during migration.
+
+#### Scenario: Bedrock runtime optionality preserves an existing caller
+
+- **GIVEN** an existing Bedrock caller has unchanged names, permissions,
+  credential mode, and defaults
+- **WHEN** the provider adds a server-side optional model source
+- **THEN** the workflow accepts the existing caller without requiring child
+  bootstrap solely for that runtime change
+
+#### Scenario: A runtime-only provider-contract field does not churn callers
+
+- **GIVEN** an existing child caller and its rendered reusable-workflow
+  invocation are unchanged
+- **WHEN** the provider contract adds or changes a field that the caller
+  renderer does not consume
+- **THEN** the caller compatibility revision remains valid and the workflow
+  does not require child bootstrap
+
+#### Scenario: A configured Bedrock default preserves existing callers
+
+- **GIVEN** an instance adds or changes a non-empty `llm.defaults.model`
+- **WHEN** the existing caller passes the organization model variable expression
+  and the reusable workflow resolves the instance default at runtime
+- **THEN** the caller compatibility revision remains valid and that caller
+  requires no regeneration
+
+#### Scenario: A Bedrock-only runtime change does not churn other providers
+
+- **GIVEN** LiteLLM and OpenAI caller-visible contracts are unchanged
+- **WHEN** Bedrock-only runtime behavior changes
+- **THEN** their caller compatibility revisions remain valid
+
+#### Scenario: Required caller permission change rejects a stale caller
+
+- **GIVEN** an existing child caller does not grant a newly required reusable-
+  workflow permission
+- **WHEN** the provider contract changes the caller permission rendered for
+  that workflow
+- **THEN** the caller compatibility revision changes and provider evaluation
+  fails before provider work with the exact child-bootstrap recovery command

@@ -19,6 +19,10 @@ inputs:
   model-variable-name:
     description: Organization variable name for the provider model
     required: true
+  model-default:
+    description: Optional non-secret model identifier value used when the organization variable is empty; Bedrock only
+    required: false
+    default: ""
   endpoint-variable-name:
     description: LiteLLM endpoint variable name; empty for OpenAI or Bedrock
     required: false
@@ -55,10 +59,6 @@ inputs:
     description: Optional non-secret correction-attempt default value
     required: false
     default: ""
-  job-timeout-minutes-default:
-    description: Optional non-secret PR-evaluation job-timeout default value
-    required: false
-    default: ""
   target-branch:
     description: Instance branch that receives the validated configuration commit
     required: true
@@ -75,6 +75,7 @@ runs:
         INSTANCE_TOKEN_NAME: ${{ inputs.instance-token-name }}
         API_KEY_NAME: ${{ inputs.api-key-name }}
         MODEL_VARIABLE_NAME: ${{ inputs.model-variable-name }}
+        MODEL_DEFAULT: ${{ inputs.model-default }}
         ENDPOINT_VARIABLE_NAME: ${{ inputs.endpoint-variable-name }}
         AWS_REGION_VARIABLE_NAME: ${{ inputs.aws-region-variable-name }}
         AWS_ROLE_ARN_VARIABLE_NAME: ${{ inputs.aws-role-arn-variable-name }}
@@ -85,13 +86,12 @@ runs:
         TIMEOUT_SECONDS_DEFAULT: ${{ inputs.timeout-seconds-default }}
         MAX_ATTEMPTS_DEFAULT: ${{ inputs.max-attempts-default }}
         MAX_CORRECTION_ATTEMPTS_DEFAULT: ${{ inputs.max-correction-attempts-default }}
-        JOB_TIMEOUT_MINUTES_DEFAULT: ${{ inputs.job-timeout-minutes-default }}
       run: |
         import json
         import os
 
         from panopticon.configure_instance import configure
-        from panopticon.providers import ProviderConfigError
+        from panopticon.providers import ProviderConfigError, resolve_provider_contract
 
         def fail(reason):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
@@ -124,10 +124,10 @@ runs:
         defaults = {
             logical: os.environ[environment_name]
             for logical, environment_name in {
+                "model": "MODEL_DEFAULT",
                 "timeout_seconds": "TIMEOUT_SECONDS_DEFAULT",
                 "max_attempts": "MAX_ATTEMPTS_DEFAULT",
                 "max_correction_attempts": "MAX_CORRECTION_ATTEMPTS_DEFAULT",
-                "job_timeout_minutes": "JOB_TIMEOUT_MINUTES_DEFAULT",
             }.items()
             if os.environ[environment_name].strip()
         }
@@ -140,6 +140,7 @@ runs:
                 os.environ["CREDENTIAL_MODE"] or None,
                 defaults,
             )
+            contract = resolve_provider_contract(configured)
         except (ProviderConfigError, json.JSONDecodeError) as exc:
             fail(f"Panopticon provider configuration is invalid: {exc}")
         except Exception as exc:
@@ -152,17 +153,30 @@ runs:
             for logical, name in configured["secrets"].items():
                 summary.write(f"- Secret `{name}` ({logical})\n")
             for logical, name in configured["variables"].items():
-                if logical in configured["optional_variables"]:
+                if logical in contract["optional_variables"]:
                     continue
                 summary.write(f"- Variable `{name}` ({logical})\n")
+            budget_variables = [
+                logical
+                for logical in contract["optional_variables"]
+                if logical not in {"model", "job_timeout_minutes"}
+            ]
             summary.write("\nOptional request-budget variables may be set as organization overrides:\n\n")
-            for logical in configured["optional_variables"]:
+            for logical in budget_variables:
                 summary.write(f"- Variable `{configured['variables'][logical]}` ({logical})\n")
             summary.write(
-                "\nLeave an optional variable empty to use the fixed instance Action, an "
-                "instance-configured default, or the workflow default. Job timeout cannot use "
-                "the Action because GitHub resolves it before this job starts.\n"
+                "\nLeave an optional request-budget variable empty to use the fixed instance "
+                "Action, an instance-configured default, or the workflow default. Job timeout "
+                "uses only the organization variable or the reusable-workflow fallback because "
+                "GitHub resolves it before this job starts.\n"
             )
+            if "model" in contract["optional_variables"]:
+                summary.write(
+                    "\nBedrock model is optional for organization prerequisite checks. Set the "
+                    f"organization variable `{configured['variables']['model']}` or provide the "
+                    "non-secret `llm.defaults.model` instance default; the organization variable "
+                    "takes precedence.\n"
+                )
             summary.write("No credential values were accepted or persisted by this workflow.\n")
 
     - name: Commit instance configuration

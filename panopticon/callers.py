@@ -1,5 +1,6 @@
 """Generate the fixed managed GitHub Actions callers installed in child repositories."""
 
+import hashlib
 import json
 
 
@@ -20,6 +21,25 @@ _CALLER_HEADER = (
 
 def _actions_expression(namespace, name):
     return "${{ " + namespace + "." + name + " }}"
+
+
+def caller_compatibility_payload(contract):
+    """Return the semantic reusable-workflow invocation contract."""
+    return {
+        "workflow": contract["workflow"],
+        "permissions": contract["permissions"],
+        "secrets": contract["secrets"],
+        "variables": contract["variables"],
+        "credential_mode": contract.get("credential_mode"),
+    }
+
+
+def caller_compatibility_revision(contract):
+    """Return the revision that guards the generated caller's compatibility boundary."""
+    serialized = json.dumps(
+        caller_compatibility_payload(contract), sort_keys=True, separators=(",", ":")
+    ).encode()
+    return hashlib.sha256(serialized).hexdigest()
 
 
 def caller_workflow_text(name, instance, ref, contract, default_branch=DEFAULT_BRANCH):
@@ -52,13 +72,19 @@ def caller_workflow_text(name, instance, ref, contract, default_branch=DEFAULT_B
         f"    uses: {instance}/.github/workflows/{remote_name}@{ref}\n",
     ]
     if name == "panopticon-pr.yml":
+        caller_defaults = {
+            logical: value
+            for logical, value in contract["defaults"].items()
+            if logical != "job_timeout_minutes"
+        }
+        revision = caller_compatibility_revision(contract)
         lines.extend(
             [
                 "# Optional provider variables: "
                 + json.dumps(contract["optional_variables"], separators=(",", ":"))
                 + "\n",
                 "# Instance provider defaults: "
-                + json.dumps(contract["defaults"], sort_keys=True, separators=(",", ":"))
+                + json.dumps(caller_defaults, sort_keys=True, separators=(",", ":"))
                 + "\n",
             ]
         )
@@ -70,7 +96,7 @@ def caller_workflow_text(name, instance, ref, contract, default_branch=DEFAULT_B
                 "    with:\n",
                 f"      instance: {instance}\n",
                 f"      workflow_ref: {ref}\n",
-                f"      configuration_revision: {contract['revision']}\n",
+                f"      configuration_revision: {revision}\n",
                 "      configuration_names: '"
                 + json.dumps(
                     {**contract["secrets"], **contract["variables"]},
@@ -78,27 +104,16 @@ def caller_workflow_text(name, instance, ref, contract, default_branch=DEFAULT_B
                     separators=(",", ":"),
                 )
                 + "'\n",
-                "      configuration_defaults: "
-                + json.dumps(json.dumps(contract["defaults"], sort_keys=True))
-                + "\n",
             ]
         )
         if contract.get("credential_mode"):
             lines.append(f"      credential_mode: {contract['credential_mode']}\n")
         for logical, configured_name in contract["variables"].items():
             if logical == "job_timeout_minutes":
-                default = contract["defaults"].get(
-                    logical, contract["template_defaults"][logical]
-                )
-                fallback_source = (
-                    "instance config" if logical in contract["defaults"] else "workflow default"
-                )
-                lines.append(
-                    f"      {logical}: ${{{{ vars.{configured_name} || '{default}' }}}}\n"
-                )
+                lines.append(f"      {logical}: {_actions_expression('vars', configured_name)}\n")
                 lines.append(
                     "      job_timeout_source: ${{ "
-                    f"vars.{configured_name} && 'organization variable' || '{fallback_source}' }}}}\n"
+                    f"vars.{configured_name} && 'organization variable' || 'workflow default' }}}}\n"
                 )
             else:
                 lines.append(f"      {logical}: {_actions_expression('vars', configured_name)}\n")

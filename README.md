@@ -24,7 +24,39 @@ initialize child repositories. The [org-owner setup guide](docs/setup-guide.md)
 walks through that process,
 including the four rollout gates (workflow access, effective configuration,
 caller identity/credentials, and real request compatibility), provider choices,
-template sync, customization protection, and local recovery from failed syncs.
+template sync, the reviewed Bedrock credential-action example, customization
+protection, and local recovery from failed syncs. Bedrock model identity may be
+provided by its organization variable or by the non-secret instance default
+`llm.defaults.model`; the public template does not select a universal model.
+Runtime-only provider behavior changes do not force child re-bootstrap. A
+change to only an effective value also does not require bootstrap. The
+caller renderer owns the compatibility fingerprint and hashes only the
+semantic reusable-workflow target, caller permissions, configured mappings,
+credential mode, and caller-passed values. Instance-resolved operational
+defaults and Bedrock model values are runtime-only, even when shown in
+cosmetic generated comments; changes to them do not require child
+re-bootstrap. Changes to the actual rendered caller ABI require regeneration
+of affected callers; an incompatible caller receives a clear bootstrap
+recovery path. The reusable workflow owns the pre-job
+timeout fallback, so changing that shared default does not require child
+re-bootstrap. For a pinned workflow ref, bootstrap and
+local sync load that ref's renderer, so the generated fingerprint and reusable
+workflow use the same version.
+Instance administrators can change the value of the mapped organization
+job-timeout variable for existing children without regenerating callers.
+Renaming the mapped variable changes the caller compatibility revision and
+requires caller regeneration; legacy instance job-timeout defaults are
+ignored during migration.
+During the migration window, provider workflows retain and ignore the old
+optional `configuration_defaults` input so pre-change callers can dispatch and
+reach the legacy compatibility gate. Newly generated callers omit it. The
+trusted provider contract also exposes a separate full-contract `revision`
+for diagnostics and migration checks. The existing reusable-workflow wire input
+`configuration_revision` is intentionally retained for caller ABI compatibility,
+but carries the semantic `caller_revision`; existing compatible callers may use
+`legacy_revision`. Renaming that wire input would require a coordinated caller
+migration. A mismatch reports `caller compatibility revision changed` and gives
+the child-bootstrap recovery path.
 For required values, optional request budgets, defaults, and the exact
 organization integration path, use the [provider-configuration guide](docs/provider-configuration.md).
 

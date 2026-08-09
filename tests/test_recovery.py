@@ -84,7 +84,7 @@ class TestRecoveryOutput(unittest.TestCase):
         text = stale_caller_recovery("acme/instance")
         self.assertIn("## Panopticon gate 2 failed: effective provider configuration", text)
         self.assertIn("Expected resource:", text)
-        self.assertIn("generated caller revision is per child", text)
+        self.assertIn("generated caller compatibility revision is per child", text)
         self.assertIn(child_bootstrap_command("acme/instance"), text)
         self.assertIn("Keep old secret names available until regeneration finishes.", text)
 
@@ -92,8 +92,8 @@ class TestRecoveryOutput(unittest.TestCase):
         self.assertEqual(
             stale_caller_recovery("acme/instance"),
             "## Panopticon gate 2 failed: effective provider configuration\n\n"
-            "- Expected resource: the current provider contract revision in `acme/instance` and this child caller\n"
-            "- Scope: the provider contract is instance-wide; the generated caller revision is per child.\n"
+            "- Expected resource: the current caller-compatible provider revision in `acme/instance` and this child caller\n"
+            "- Scope: the provider contract is instance-wide; the generated caller compatibility revision is per child.\n"
             "- Evidence: the caller revision does not match the checked-out instance configuration.\n\n"
             "Fix location: run this from inside the child clone:\n\n"
             "~~~bash\n"
@@ -121,6 +121,22 @@ class TestRecoveryOutput(unittest.TestCase):
         self.assertIn("your-org-identity-tool register --repository 'acme/child-service'", text)
         self.assertIn(child_bootstrap_command("acme/instance"), text)
         self.assertIn("rerun or await the child PR workflow", text)
+
+    def test_credential_action_recovery_is_copyable_and_explains_automatic_protection(self):
+        text = credential_action_recovery("acme/instance", "acme/child-service")
+        self.assertIn(
+            "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
+            "docs/examples/panopticon-aws-credentials/action.yml",
+            text,
+        )
+        self.assertIn(
+            '"protected_paths": [\n    ".github/actions/panopticon-aws-credentials/action.yml"\n  ]',
+            text,
+        )
+        self.assertIn("automatically protects the fixed action during template sync", text)
+        self.assertIn("PANOPTICON_AWS_REGION", text)
+        self.assertNotIn("amazon.secret", text)
+        self.assertNotIn("access_key_value", text)
 
     def test_credential_action_recovery_accepts_instance_specific_fixed_path(self):
         text = credential_action_recovery(

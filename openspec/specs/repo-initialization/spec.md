@@ -1946,3 +1946,18 @@ identify the child configuration path and accepted values.
   unsupported value
 - **THEN** initialization or PR evaluation reports the child configuration path
   and states that only `advisory` and `blocking` are accepted
+
+### Requirement: Instance-managed Bedrock setup exposes the reviewed action example
+
+The public setup guide SHALL link to a credential-free composite-action
+skeleton and explain that an instance owner copies it to
+`.github/actions/panopticon-aws-credentials/action.yml`, replaces only the
+organization broker step, verifies the `PANOPTICON_AWS_REGION` output contract,
+and commits the action. The guide and example SHALL accept no credential value
+through Panopticon configuration and SHALL use placeholders only.
+
+#### Scenario: Owner enables instance-managed Bedrock credentials
+
+- **WHEN** an owner selects `instance-managed`
+- **THEN** setup guidance provides the reviewed example, fixed destination,
+  broker adaptation boundary, region-output contract, and validation step

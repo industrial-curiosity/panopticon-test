@@ -343,6 +343,8 @@ class TestDefaultInstancePayload(unittest.TestCase):
     )
     FAKE_CALLERS = (
         "CALLER_WORKFLOWS = ('panopticon-pr.yml',)\n"
+        "def caller_compatibility_revision(_contract):\n"
+        "    return 'x'\n"
         "def caller_workflow_text(*_args, **_kwargs):\n"
         "    return ''\n"
     )

@@ -66,11 +66,9 @@ repo's shard.
 
 ### Requirement: Instance branch lifecycle
 
-When a PR closes (merged or abandoned), the matching `{repo}/{branch}` branch in
-the instance repo SHALL be
-deleted. Pruning of orphaned branches beyond the close trigger is deliberately
-deferred until explicitly
-required.
+When a PR closes (merged or abandoned), the instance repo SHALL delete the
+matching `{repo}/{branch}` branch. Pruning of orphaned branches beyond the
+close trigger is deliberately deferred until explicitly required.
 
 #### Scenario: PR merged
 
