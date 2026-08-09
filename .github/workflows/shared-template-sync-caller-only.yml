@@ -57,7 +57,7 @@ jobs:
           PAT that has Contents and Workflows read/write access, then retry.
           EOF
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           # A PAT is required only when this sync pushes workflow-file changes. The fallback keeps

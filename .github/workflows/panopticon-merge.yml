@@ -33,7 +33,7 @@ jobs:
       PYTHONSAFEPATH: "1"
     steps:
       - name: Check out merged default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Initialization check
         shell: bash
@@ -74,7 +74,7 @@ jobs:
           fi
 
       - name: Check out instance repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           repository: ${{ env.PANOPTICON_INSTANCE }}
           token: ${{ secrets.instance_token }}

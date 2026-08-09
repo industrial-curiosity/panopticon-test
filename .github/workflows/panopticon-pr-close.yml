@@ -19,7 +19,7 @@ jobs:
       contents: read
     steps:
       - name: Check out repo (for panopticon/config.json)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: Delete instance branch for this PR
         shell: bash

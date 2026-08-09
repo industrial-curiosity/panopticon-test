@@ -106,7 +106,7 @@ jobs:
       PANOPTICON_INSTANCE_TOKEN: ${{ secrets.instance_token }}
     steps:
       - name: Check out PR branch
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -202,7 +202,7 @@ jobs:
 
       - name: Check out instance repo (tooling, skills, compiled index, org config)
         if: steps.init.outputs.initialized == 'true'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7.0.1
         with:
           repository: ${{ inputs.instance }}
           token: ${{ secrets.instance_token }}
@@ -229,7 +229,7 @@ jobs:
           fi
 
       - name: Set up Python for the Bedrock adapter
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.12"
 
@@ -239,7 +239,7 @@ jobs:
       - name: Configure AWS credentials through GitHub OIDC
         id: github_credentials
         if: steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'github-oidc'
-        uses: aws-actions/configure-aws-credentials@v6.1.2
+        uses: aws-actions/configure-aws-credentials@v6.2.3
         with:
           role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ${{ inputs.aws_region }}
