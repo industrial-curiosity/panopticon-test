@@ -1,10 +1,10 @@
-"""Local sync script (tooling-currency capability): pulls the instance repo's current skills and
-vendored local-tooling modules into an already-bootstrapped child repo, on demand.
+"""Local sync script: refreshes managed skills, tooling, and caller workflows in a child repo.
 
-Vendored into ``LOCAL_TOOLING_MODULES`` (``bootstrap.py``) so ``python3 -m panopticon.sync`` works
-immediately after Phase 1 bootstrap with no instance-repo clone and no ``PYTHONPATH`` setup — the
-same "no local instance clone required" constraint every other local-tooling module already
-satisfies (design D2).
+Vendored by the instance-owned ``local-tooling.json`` manifest so ``python3 -m panopticon.sync``
+works immediately after Phase 1 bootstrap with no instance-repo clone and no ``PYTHONPATH`` setup
+— the same "no local instance clone required" constraint every other local-tooling module already
+satisfies (design D2). Sync downloads that manifest from the selected instance ref on every run;
+the child's copy is never used to select modules.
 
 This module is deliberately self-contained rather than importing from ``.bootstrap``: bootstrap.py
 is CI-only and is never vendored into a child repo (repo-initialization spec: "CI-only modules...
@@ -16,11 +16,12 @@ this codebase's existing precedent for the same CI/local module boundary (`init_
 `ORG_SECRETS`/`ORG_VARS` duplicating bootstrap.py's). `test_sync.py` asserts these stay in sync with
 bootstrap.py's copies as a drift guard.
 
-Default behavior overwrites the child's skills and vendored tooling unconditionally from the
-instance's current default branch — no per-file protection at the child layer (design D5): the
-user's own review of the resulting ``git diff``/``git status`` before committing is the safety net,
-the same trust model ``bootstrap.py``'s existing idempotent overwrite already uses. ``--check-updates``
-makes the entire run a pure dry run: it reports which files would change via a git-blob-sha
+Default behavior overwrites the child's managed skills, vendored tooling, and generated callers
+unconditionally from the instance's current configuration — no per-file protection at the child
+layer: the user's own review of the resulting ``git diff``/``git status`` before committing is the
+safety net. Python modules outside the remote manifest remain untouched and are reported as
+instance-excluded or child-only candidates for reviewed removal. ``--check-updates`` makes the
+entire run a pure dry run: it reports which files would change via a git-blob-sha
 comparison (GitHub's tree API already returns each file's blob ``sha``; confirmed
 ``sha1(f"blob {len(data)}\\0".encode() + data)`` reproduces ``git hash-object``'s output exactly)
 and writes nothing.
@@ -40,10 +41,13 @@ import urllib.request
 from pathlib import Path
 
 from .config import load_repo_config
+from .providers import ProviderConfigError, resolve_provider_contract
 
 DEFAULT_BRANCH = "main"
 SKILLS_PREFIX = ".agents/skills/"
 DEFAULT_SKILLS_LOCATION = ".agents/skills"
+LOCAL_TOOLING_MANIFEST_PATH = "panopticon/local-tooling.json"
+LOCAL_TOOLING_MANIFEST_SCHEMA_VERSION = 1
 
 # Mirrors bootstrap.py's TOOL_LOCATIONS exactly (test_sync.py asserts this; source of truth:
 # docs/agentskills-support.md) — needed here only for _detect_existing_location's search order,
@@ -59,13 +63,6 @@ TOOL_LOCATIONS = {
     "opencode": ("opencode", (".agents/skills", ".opencode/skills", ".claude/skills")),
     "pi": ("Pi", (".agents/skills", ".pi/skills")),
 }
-
-# Mirrors bootstrap.py's LOCAL_TOOLING_MODULES exactly (test_sync.py asserts this).
-LOCAL_TOOLING_MODULES = (
-    "__init__.py", "config.py", "dependencies.py", "docs.py", "index.py", "init_repo.py",
-    "sync.py", "org_diagram_link.py",
-)
-
 
 def candidate_locations():
     locations = [DEFAULT_SKILLS_LOCATION]
@@ -93,26 +90,64 @@ def _api_headers(token=None):
     return headers
 
 
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+_RETRYABLE_STATUS = {500, 502, 503, 504}
 
 
-def _api_get(url, token=None, urlopen=urllib.request.urlopen, max_attempts=3, sleep=time.sleep):
+def _rate_limit_delay(status, headers, body, now, fallback):
+    """Return a GitHub-directed retry delay, or None for a non-rate-limit response."""
+    headers = headers or {}
+    retry_after = headers.get("Retry-After")
+    remaining = headers.get("X-RateLimit-Remaining")
+    reset = headers.get("X-RateLimit-Reset")
+    identified = (
+        status == 429
+        or retry_after is not None
+        or str(remaining).strip() == "0"
+        or "rate limit" in body.lower()
+    )
+    if status != 429 and (status != 403 or not identified):
+        return None
+    if retry_after is not None:
+        try:
+            return max(0.0, float(retry_after))
+        except (TypeError, ValueError):
+            pass
+    if reset is not None:
+        try:
+            return max(0.0, float(reset) - now())
+        except (TypeError, ValueError):
+            pass
+    return fallback
+
+
+def _api_get(url, token=None, urlopen=urllib.request.urlopen, max_attempts=3, sleep=time.sleep,
+             now=time.time, print_fn=print):
     req = urllib.request.Request(url, headers=_api_headers(token))
     last_error = None
     for attempt in range(1, max_attempts + 1):
+        rate_limited = False
         try:
             with urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
+            headers = exc.headers
             with exc:
                 body = exc.read().decode("utf-8", "replace")[:400]
             last_error = f"GitHub API {exc.code} for {url}: {body}"
-            if exc.code not in _RETRYABLE_STATUS:
+            fallback = 2 ** (attempt - 1)
+            delay = _rate_limit_delay(exc.code, headers, body, now, fallback)
+            if delay is None and exc.code not in _RETRYABLE_STATUS:
                 raise RuntimeError(last_error)
+            rate_limited = delay is not None
+            if not rate_limited:
+                delay = fallback
         except urllib.error.URLError as exc:
             last_error = f"GitHub API request failed for {url}: {exc.reason}"
+            delay = 2 ** (attempt - 1)
         if attempt < max_attempts:
-            sleep(2 ** (attempt - 1))
+            if rate_limited:
+                print_fn(f"  GitHub API rate limited; retrying in {int(delay + 0.999)} seconds...")
+            sleep(delay)
     raise RuntimeError(last_error)
 
 
@@ -170,14 +205,24 @@ def download_skills(owner, repo, ref, tree, token=None, child_root=".", dest_loc
     return count
 
 
-def download_local_tooling(owner, repo, ref, token=None, child_root=".",
+def download_local_tooling(owner, repo, ref, tree, tooling_modules, token=None, child_root=".",
                            urlopen=urllib.request.urlopen):
-    dest_dir = Path(child_root) / "panopticon"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    for name in LOCAL_TOOLING_MODULES:
-        content = _fetch_file_bytes(owner, repo, f"panopticon/{name}", ref, token, urlopen)
-        (dest_dir / name).write_bytes(content)
-    return len(LOCAL_TOOLING_MODULES)
+    """Fetch the manifest-managed directory before writing any of its files.
+
+    This lets an older sync entrypoint acquire a newly-required module as part
+    of the same reconciliation.  Applying is additive/overwrite-only: no
+    local path is removed when the source directory no longer contains it.
+    """
+    entries = _tooling_tree_entries(tree, tooling_modules)
+    staged = [
+        (item["path"], _fetch_file_bytes(owner, repo, item["path"], ref, token, urlopen))
+        for item in entries
+    ]
+    for path, content in staged:
+        local = Path(child_root) / path
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_bytes(content)
+    return len(staged)
 
 
 # ── Sync-specific logic ──────────────────────────────────────────────────────────────────────
@@ -194,9 +239,84 @@ def _skill_tree_entries(tree):
     ]
 
 
-def _tooling_tree_entries(tree):
-    wanted = {f"panopticon/{name}" for name in LOCAL_TOOLING_MODULES}
-    return [item for item in tree if item["type"] == "blob" and item["path"] in wanted]
+def _remote_local_tooling_modules(owner, repo, ref, token=None, urlopen=urllib.request.urlopen):
+    """Load the instance-owned child-safe tooling manifest without executing it."""
+    source = _fetch_file_bytes(owner, repo, LOCAL_TOOLING_MANIFEST_PATH, ref, token, urlopen)
+    try:
+        manifest = json.loads(source)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"invalid instance local-tooling manifest JSON: {exc}") from exc
+    if not isinstance(manifest, dict) or set(manifest) != {"schema_version", "modules"}:
+        raise RuntimeError("instance local-tooling manifest must contain exactly schema_version and modules")
+    if (
+        type(manifest["schema_version"]) is not int
+        or manifest["schema_version"] != LOCAL_TOOLING_MANIFEST_SCHEMA_VERSION
+    ):
+        raise RuntimeError(
+            "instance local-tooling manifest has unsupported schema_version "
+            f"{manifest['schema_version']!r}"
+        )
+    modules = manifest["modules"]
+    if not isinstance(modules, list) or not modules:
+        raise RuntimeError("instance local-tooling manifest modules must be a non-empty array")
+    if len(set(modules)) != len(modules):
+        raise RuntimeError("instance local-tooling manifest must not contain duplicate modules")
+    if not all(
+        isinstance(name, str)
+        and name.endswith(".py")
+        and "/" not in name
+        and "\\" not in name
+        and name not in {".", ".."}
+        for name in modules
+    ):
+        raise RuntimeError("instance local-tooling manifest contains an invalid module path")
+    return modules
+
+
+def _tooling_tree_entries(tree, tooling_modules):
+    by_path = {
+        item["path"]: item
+        for item in tree
+        if item["type"] == "blob"
+    }
+    paths = [f"panopticon/{name}" for name in tooling_modules]
+    missing = [path for path in paths if path not in by_path]
+    if missing:
+        raise RuntimeError(
+            "instance local-tooling manifest lists files missing from its tree: " + ", ".join(missing)
+        )
+    return [by_path[path] for path in paths]
+
+
+def _unmanaged_tooling_findings(tree, child_root, tooling_modules):
+    """Classify child Python modules outside the remotely selected manifest."""
+    managed_paths = {f"panopticon/{name}" for name in tooling_modules}
+    instance_paths = {
+        item["path"]
+        for item in tree
+        if item["type"] == "blob"
+        and item["path"].startswith("panopticon/")
+        and item["path"].endswith(".py")
+    }
+    tooling_root = Path(child_root) / "panopticon"
+    if not tooling_root.is_dir():
+        return []
+    findings = []
+    for path in sorted(tooling_root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        relative = path.relative_to(child_root).as_posix()
+        if relative in managed_paths:
+            continue
+        if relative in instance_paths:
+            findings.append(
+                f"{relative} is instance-excluded by the local-tooling manifest; review before removal"
+            )
+        else:
+            findings.append(
+                f"{relative} is child-only and unknown to the instance; review before removal"
+            )
+    return findings
 
 
 def _compare(local, item, relative):
@@ -207,26 +327,112 @@ def _compare(local, item, relative):
     return []
 
 
-def check_updates(tree, child_root, child_location):
+def _fetch_org_config(owner, repo, ref, token=None, urlopen=urllib.request.urlopen):
+    """Fetch the instance configuration required to render managed child callers."""
+    try:
+        return json.loads(
+            _fetch_file_bytes(owner, repo, "panopticon.config.json", ref, token, urlopen)
+        )
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError(
+            f"invalid panopticon.config.json fetched from {owner}/{repo}@{ref}: {exc}"
+        ) from exc
+
+
+def _caller_namespace(source):
+    namespace = {"__name__": "panopticon.callers_preview"}
+    # Renderer code is remote, but provider configuration is resolved separately
+    # so renderer failures remain distinct from provider configuration failures.
+    try:
+        exec(compile(source, "panopticon/callers.py", "exec"), namespace)
+    except Exception as exc:
+        raise CallerRendererError(f"could not execute caller renderer: {exc}") from exc
+    return namespace
+
+
+def _caller_compatibility_revision(source):
+    namespace = _caller_namespace(source)
+    compatibility_revision = namespace.get("caller_compatibility_revision")
+    if not callable(compatibility_revision):
+        raise RuntimeError(
+            "instance caller renderer does not export callable "
+            "caller_compatibility_revision"
+        )
+    return compatibility_revision
+
+
+class CallerRendererError(RuntimeError):
+    """The caller renderer could not provide a compatible revision."""
+
+
+def _guard_caller_compatibility_revision(compatibility_revision):
+    def guarded(contract):
+        try:
+            return compatibility_revision(contract)
+        except Exception as exc:
+            raise CallerRendererError(
+                f"caller compatibility revision failed: {exc}"
+            ) from exc
+
+    return guarded
+
+
+def _caller_updates_from_source(source, child_root, instance, ref, contract, default_branch):
+    """Render caller preview from the canonical remote module without writing it.
+
+    Older children may not yet contain callers.py.  ``--check-updates`` must
+    remain read-only, so it loads the trusted instance copy in memory rather
+    than creating the module merely to preview the generated callers.
+    """
+    namespace = _caller_namespace(source)
+    try:
+        workflow_names = tuple(namespace["CALLER_WORKFLOWS"])
+        render_workflow = namespace["caller_workflow_text"]
+    except Exception as exc:
+        raise CallerRendererError(f"could not load caller workflows: {exc}") from exc
+    updates = []
+    for name in workflow_names:
+        relative = f".github/workflows/{name}"
+        try:
+            expected = render_workflow(name, instance, ref, contract, default_branch)
+        except Exception as exc:
+            raise CallerRendererError(f"caller workflow rendering failed: {exc}") from exc
+        path = Path(child_root) / relative
+        if not path.is_file():
+            updates.append((relative, expected, "would be created (missing locally)"))
+        elif path.read_text(encoding="utf-8") != expected:
+            updates.append((relative, expected, "would be updated (content differs from generated caller)"))
+    return updates
+
+
+def _write_callers(child_root, updates):
+    for relative, content, _ in updates:
+        path = Path(child_root) / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+
+def check_updates(tree, child_root, child_location, tooling_modules, caller_updates=()):
     """Pure dry run: compare each relevant tree entry's blob sha against the child's local file,
-    using no network calls beyond the already-fetched tree. Returns a list of finding strings;
+    using no network calls beyond the already-fetched tree. Returns only managed-resource findings;
     writes nothing."""
     findings = []
     for item in _skill_tree_entries(tree):
         relative = item["path"][len(SKILLS_PREFIX):]
         local = Path(child_root) / child_location / relative
         findings.extend(_compare(local, item, relative))
-    for item in _tooling_tree_entries(tree):
+    for item in _tooling_tree_entries(tree, tooling_modules):
         relative = item["path"]
         local = Path(child_root) / relative
         findings.extend(_compare(local, item, relative))
+    findings.extend(f"{relative} {reason}" for relative, _, reason in caller_updates)
     return findings
 
 
 def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     env = env if env is not None else os.environ
     parser = argparse.ArgumentParser(
-        description="Pull the instance repo's current skills and vendored tooling into this child repo."
+        description="Refresh managed Panopticon skills, tooling, and workflow callers in this child repo."
     )
     parser.add_argument("--check-updates", action="store_true",
                         help="report which files would change; write nothing")
@@ -240,27 +446,89 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
 
     token = resolve_token(env)
     default_branch = env.get("PANOPTICON_DEFAULT_BRANCH", DEFAULT_BRANCH)
+    workflow_ref = repo_config.get("workflow_ref", default_branch)
     location = _detect_existing_location(child_root) or DEFAULT_SKILLS_LOCATION
 
-    tree = _fetch_tree(owner, repo, default_branch, token, urlopen)
-    findings = check_updates(tree, child_root, location)
+    try:
+        org_config = _fetch_org_config(owner, repo, workflow_ref, token, urlopen)
+    except (RuntimeError, ProviderConfigError) as exc:
+        print(f"error: could not read valid instance provider configuration: {exc}")
+        return 1
+
+    try:
+        caller_source = _fetch_file_bytes(
+            owner, repo, "panopticon/callers.py", workflow_ref, token, urlopen
+        )
+        compatibility_revision = _caller_compatibility_revision(caller_source)
+    except Exception as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
+        return 1
+
+    compatibility_revision = _guard_caller_compatibility_revision(compatibility_revision)
+
+    try:
+        contract = resolve_provider_contract(org_config.get("llm"), compatibility_revision)
+    except ProviderConfigError as exc:
+        print(f"error: could not read valid instance provider configuration: {exc}")
+        return 1
+    except CallerRendererError as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
+        return 1
+
+    try:
+        tree = _fetch_tree(owner, repo, default_branch, token, urlopen)
+        tooling_modules = _remote_local_tooling_modules(
+            owner, repo, default_branch, token, urlopen
+        )
+    except RuntimeError as exc:
+        print(f"error: could not load instance local-tooling manifest: {exc}")
+        return 1
+    try:
+        tooling_findings = check_updates(tree, child_root, location, tooling_modules)
+    except RuntimeError as exc:
+        print(f"error: could not use instance local-tooling manifest: {exc}")
+        return 1
+
+    try:
+        callers = _caller_updates_from_source(
+            caller_source, child_root, repo_config["instance"], workflow_ref, contract,
+            default_branch,
+        )
+    except CallerRendererError as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
+        return 1
+    resource_findings = tooling_findings + [
+        f"{relative} {reason}" for relative, _, reason in callers
+    ]
+    unmanaged_findings = _unmanaged_tooling_findings(tree, child_root, tooling_modules)
 
     if args.check_updates:
-        if not findings:
-            print("Everything is current — no skills or vendored tooling would change.")
+        if not resource_findings and not unmanaged_findings:
+            print("Everything is current — no managed skills, tooling, or workflow callers would change.")
         else:
-            for finding in findings:
+            for finding in unmanaged_findings:
+                print(f"  warning: {finding}")
+            for finding in resource_findings:
                 print(f"  {finding}")
         return 0
 
-    if not findings:
-        print("Everything is current — no skills or vendored tooling changed.")
+    if not resource_findings:
+        for finding in unmanaged_findings:
+            print(f"  warning: {finding}")
+        print("Everything is current — no managed skills, tooling, or workflow callers changed.")
         return 0
 
+    for finding in unmanaged_findings:
+        print(f"  warning: {finding}")
+
     n_skills = download_skills(owner, repo, default_branch, tree, token, child_root, location, urlopen)
-    n_modules = download_local_tooling(owner, repo, default_branch, token, child_root, urlopen)
+    n_modules = download_local_tooling(
+        owner, repo, default_branch, tree, tooling_modules, token, child_root, urlopen
+    )
+    # Reuse the pre-write render so renderer failures cannot occur after managed resources are written.
+    _write_callers(child_root, callers)
     print(
-        f"{n_skills} skill file(s) and {n_modules} tooling module(s) synced from "
+        f"{n_skills} skill file(s), {n_modules} tooling module(s), and {len(callers)} workflow caller(s) synced from "
         f"{owner}/{repo}@{default_branch}."
     )
     print("Review `git diff`/`git status` before committing.")

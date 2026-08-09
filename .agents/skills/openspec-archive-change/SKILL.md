@@ -1,6 +1,6 @@
 ---
 name: openspec-archive-change
-description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete.
+description: Archive a completed change in the experimental workflow. Use when the user wants to finalize and archive a change after implementation is complete. Automatically select the sole active change; ask for selection only when multiple active changes exist.
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -11,18 +11,22 @@ metadata:
 
 Archive a completed change in the experimental workflow.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name. If omitted, list active changes: select the sole active change automatically, or prompt for a selection when multiple active changes exist.
 
-**Steps**
+## Steps
 
-1. **If no change name provided, prompt for selection**
+1. **If no change name is provided, resolve the active change**
 
-   Run `openspec list --json` to get available changes. Use the **AskUserQuestion tool** to let the user select.
+   Run `openspec list --json` to get available changes. Select the sole active
+   change immediately; use the **AskUserQuestion tool** only when two or more
+   active changes require a user choice.
 
    Show only active changes (not already archived).
    Include the schema used for each change if available.
 
-   **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
+   - If exactly one active change exists, select it and continue without prompting.
+   - If multiple active changes exist, prompt the user to select one.
+   - If no active changes exist, report that there is nothing to archive.
 
 2. **Check artifact completion status**
 
@@ -66,11 +70,14 @@ Archive a completed change in the experimental workflow.
    - If changes needed: "Sync now (recommended)", "Archive without syncing"
    - If already synced: "Archive now", "Sync anyway", "Cancel"
 
-   If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
+   If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use
+   Skill tool to invoke openspec-sync-specs for change '&lt;name&gt;'. Delta spec analysis:
+   &lt;include the analyzed delta spec summary&gt;"). Proceed to archive regardless of choice.
 
 5. **Perform the archive**
 
    Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
+
    ```bash
    mkdir -p "<planningHome.changesDir>/archive"
    ```
@@ -94,9 +101,9 @@ Archive a completed change in the experimental workflow.
    - Whether specs were synced (if applicable)
    - Note about any warnings (incomplete artifacts/tasks)
 
-**Output On Success**
+## Output On Success
 
-```
+```text
 ## Archive Complete
 
 **Change:** <change-name>
@@ -107,8 +114,10 @@ Archive a completed change in the experimental workflow.
 All artifacts complete. All tasks complete.
 ```
 
-**Guardrails**
-- Always prompt for change selection if not provided
+## Guardrails
+
+- Automatically select the sole active change; prompt only when multiple active changes require a choice
+- Never ask the user to confirm a sole active change before continuing.
 - Use artifact graph (openspec status --json) for completion checking
 - Don't block archive on warnings - just inform and confirm
 - Preserve .openspec.yaml when moving to archive (it moves with the directory)

@@ -5,7 +5,8 @@ verdict contract (defined in the panopticon-doc-drift skill) is JSON::
 
     {
       "stale": true,
-      "reasons": [{"doc": "docs/components/api.md", "why": "...", "update": "..."}],
+      "reasons": [{"doc": "docs/components/api.md", "why": "...", "update": "...",
+                   "evidence": "src/api.py"}],
       "summary": "one-line verdict"
     }
 
@@ -19,30 +20,93 @@ import json
 import sys
 from pathlib import Path
 
-from .llm import LLMClient, LLMRequestError, LLMResponseError, MissingRequirementError
+from .llm import (
+    LLMClient,
+    LLMConfigurationError,
+    LLMRequestError,
+    LLMResponseError,
+    MissingRequirementError,
+)
 from .report import format_operational_failure
 from .skills import load_skill
+from .scope import file_reason, path_reason, redact_ignored_declarations
 
 DRIFT_SKILL = "panopticon-doc-drift"
 MAX_DOC_BYTES = 200_000
+NON_BEHAVIOR_PATH_PREFIXES = (".agents/", "docs/", "openspec/", "tests/")
+NON_BEHAVIOR_FILENAMES = {"CHANGELOG.md", "README.md"}
 
 
-def _validate_drift_verdict(verdict):
+def behavior_bearing_paths(diff_text, repo_root=None):
+    """Return changed paths whose contents can change the repository's behavior."""
+    paths = []
+    for line in diff_text.splitlines():
+        if line.startswith("+++ b/"):
+            path = line.removeprefix("+++ b/")
+        elif line.startswith("--- a/"):
+            path = line.removeprefix("--- a/")
+        else:
+            continue
+        if (
+            path.startswith(NON_BEHAVIOR_PATH_PREFIXES)
+            or path in NON_BEHAVIOR_FILENAMES
+            or path.endswith(".md")
+            or path_reason(path)
+        ):
+            continue
+        if repo_root is not None:
+            source_path = Path(repo_root) / path
+            if source_path.is_file() and file_reason(
+                path, source_path.read_text(encoding="utf-8", errors="replace")
+            ):
+                continue
+        if path not in paths:
+            paths.append(path)
+    return paths
+
+
+def _validate_drift_verdict(verdict, behavior_paths):
     if not isinstance(verdict, dict) or not isinstance(verdict.get("stale"), bool):
         raise ValueError("'stale' must be a boolean")
-    if not isinstance(verdict.get("reasons", []), list):
+    reasons = verdict.get("reasons", [])
+    if not isinstance(reasons, list):
         raise ValueError("'reasons' must be a list")
+    if not verdict["stale"]:
+        if reasons:
+            raise ValueError("a clean verdict must have no reasons")
+        return
+    if not reasons:
+        raise ValueError("a stale verdict must include at least one reason")
+    for reason in reasons:
+        if not isinstance(reason, dict):
+            raise ValueError("each stale reason must be an object")
+        for field in ("doc", "why", "update", "evidence"):
+            if not isinstance(reason.get(field), str) or not reason[field].strip():
+                raise ValueError(f"each stale reason needs a non-empty '{field}'")
+        if reason["evidence"] not in behavior_paths:
+            raise ValueError("stale reason evidence must name a changed behavior-bearing file")
+        if reason["update"].strip().lower() in {"none", "n/a", "no update needed"}:
+            raise ValueError("a stale reason must describe a required documentation update")
 
 
-def check_drift(diff_text, docs, client, skill_root="."):
+def check_drift(diff_text, docs, client, skill_root=".", repo_root=None):
     """Judge whether the docs require updates for this diff. ``docs`` is ``{path: text}``."""
+    behavior_paths = behavior_bearing_paths(diff_text, repo_root=repo_root)
+    if not behavior_paths:
+        return {
+            "stale": False,
+            "reasons": [],
+            "summary": "This PR changes no behavior-bearing files.",
+        }
     doc_sections = [f"### {path}\n```markdown\n{text}\n```" for path, text in sorted(docs.items())]
     user_content = (
-        "## PR diff\n```diff\n" + diff_text + "\n```\n\n## Current documentation\n\n"
+        "## PR diff\n```diff\n" + redact_ignored_declarations(diff_text)
+        + "\n```\n\n## Current documentation\n\n"
         + "\n\n".join(doc_sections)
     )
     return client.complete_json(
-        load_skill(DRIFT_SKILL, root=skill_root), user_content, _validate_drift_verdict,
+        load_skill(DRIFT_SKILL, root=skill_root), user_content,
+        lambda verdict: _validate_drift_verdict(verdict, behavior_paths),
         response_label="drift verdict",
     )
 
@@ -114,6 +178,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="LLM doc-vs-code drift check (CI only).")
     parser.add_argument("--diff-file", required=True, help="file containing the PR diff")
     parser.add_argument("--docs-root", required=True)
+    parser.add_argument("--repo-root", default=".")
     parser.add_argument("--skill-root", default=".", help="checkout containing .agents/skills")
     parser.add_argument("--report-file", help="write the markdown report here (for PR comments)")
     parser.add_argument("--actions-file", help="write the structured TL;DR actions JSON here")
@@ -126,8 +191,11 @@ def main(argv=None):
     try:
         client = LLMClient.from_env()
         diff_text = Path(args.diff_file).read_text(encoding="utf-8", errors="replace")
-        verdict = check_drift(diff_text, collect_docs(args.docs_root), client, skill_root=args.skill_root)
-    except (MissingRequirementError, LLMRequestError, LLMResponseError) as exc:
+        verdict = check_drift(
+            diff_text, collect_docs(args.docs_root), client, skill_root=args.skill_root,
+            repo_root=args.repo_root,
+        )
+    except (MissingRequirementError, LLMConfigurationError, LLMRequestError, LLMResponseError) as exc:
         print(f"::error::Panopticon doc-drift check could not run: {exc}")
         # Written to --report-file so the combined report shows this failure (pr-evaluation spec:
         # "Checks run independently...") instead of silently omitting the check that crashed.

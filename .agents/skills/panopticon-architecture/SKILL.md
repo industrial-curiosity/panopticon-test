@@ -41,14 +41,54 @@ the user's agent.
 
 ## Provider-agnostic agents
 
-CI agent steps are configured via `PANOPTICON_LLM_API_KEY` and
-`PANOPTICON_LLM_ENDPOINT` secrets. litellm-compatible endpoints are the first
-supported target. Never hardcode a specific LLM provider into workflows or
-tooling. All local actions — initialization, doc updates, interface indexing
-— run through the user's preferred AI agent with the bundled skills and need
-no Panopticon LLM secrets. When a CI requirement (endpoint, key, token) is
-missing or unreachable, fail loudly and clearly naming what is missing —
-never skip silently.
+An instance explicitly selects one built-in CI provider contract through the
+fixed-provider `Configure Panopticon — LiteLLM`, `Configure Panopticon —
+OpenAI`, or `Configure Panopticon — Bedrock` workflow; the template has no
+implicit provider. Those manual entrypoints expose only provider-relevant
+Actions names and share one local
+configuration action for validation and persistence.
+LiteLLM-compatible HTTP, direct OpenAI Chat Completions at the fixed
+`https://api.openai.com/v1` endpoint, and native Bedrock Converse through GitHub
+OIDC are separate reusable workflow entrypoints. The trusted provider registry
+owns their workflow paths, permissions, logical inputs, and default Actions
+names; instance configuration may rename secrets and variables but may not
+supply an arbitrary workflow path. The OpenAI provider has no configurable
+endpoint. Child bootstrap maps configured names explicitly and never uses
+`secrets: inherit`.
+
+The shared prompting, validation, correction, and retry surface remains
+provider-neutral. Provider-specific authentication and transport stay inside
+the selected adapter/workflow. All local actions — initialization, doc updates,
+interface indexing — run through the user's preferred AI agent with the bundled
+skills and need no Panopticon LLM secrets. Missing, stale, unreachable, or
+incapable provider configuration fails loudly with exact instance-configuration
+or child-bootstrap recovery commands; it never skips or falls back.
+Shared CLI parsers may expose a consistent option surface across providers, but
+must reject a non-empty provider-specific option at the CLI boundary with a
+message naming the supported provider before generic configuration or writes.
+
+Generated caller compatibility is owned by the caller renderer. Hash the
+semantic reusable-workflow target, caller permissions, mappings, secrets, and
+caller-supplied values, while keeping shared-workflow fallbacks outside the
+caller ABI whenever GitHub can apply them before job steps run. Runtime-only
+fallback changes should not require child re-bootstrap; invalidate callers
+only when their rendered invocation can no longer be accepted safely.
+Reusable workflow contracts SHALL declare only caller inputs consumed by the
+workflow body, except for an explicitly time-bounded migration shim that is
+declared optional, ignored, and covered by dispatch-level compatibility tests;
+generated callers SHALL omit that shim. Renderer loading boundaries SHALL convert ordinary
+renderer exceptions into the caller-renderer diagnostic before any managed
+resource write; bootstrap renderer retrieval may fall back only for a 404 or
+connection-level failure, never for authentication or other API failures.
+Instance-owned operational controls SHALL resolve at the instance or reusable-
+workflow boundary so administrators can change them without requiring child
+repository maintainers to regenerate or commit callers. When a platform
+evaluates a setting before instance steps run, use the organization-level
+control exposed to the reusable workflow and keep legacy instance fields
+migration-only rather than advertising a dead fallback.
+Load, validate, and render the caller before writing any managed sync resource;
+reuse that validated render for the write so renderer failures remain controlled
+and cannot occur after partial sync.
 
 ## Sync and auth model
 
@@ -64,12 +104,15 @@ never skip silently.
   named `{repo}/{branch}` in the instance repo, so in-flight branch state is
   visible org-wide. Only merges to main touch the instance repo's default
   branch.
-- The default CI `GITHUB_TOKEN` cannot reach the private instance repo. An
-  org-level token secret (`PANOPTICON_INSTANCE_TOKEN`) grants instance-repo
-  read and write (PR simulation, branch pushes, merge push).
+- The default CI `GITHUB_TOKEN` cannot reach the private instance repo. A
+  configurable org-level token secret (`PANOPTICON_INSTANCE_TOKEN` by default)
+  grants instance-repo read and write (PR simulation, branch pushes, merge push).
 - All Panopticon secrets are org-level. Child repos never configure per-repo
-  secrets or env vars — their caller workflows are trivial references to the
-  shared workflows.
+  secrets or env vars — generated callers explicitly map the instance-selected
+  org names to canonical reusable-workflow inputs and secrets.
+- An automated child resource sync may update only its open automation pull
+  request. Once that pull request is merged or closed, a later sync creates a
+  new one.
 
 ## Index lifecycle
 

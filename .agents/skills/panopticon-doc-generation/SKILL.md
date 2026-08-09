@@ -10,7 +10,9 @@ description: >-
 # Panopticon documentation generation
 
 Produce the four documentation layers in the repo's configured documentation location (recorded
-as `docs_location` in `panopticon/config.json`; default `docs/`). Regeneration always updates the
+as `docs_location` in `panopticon/config.json`; default `docs/`). During first-time
+`/panopticon-init`, before finalization writes that file, adopt an existing documentation directory
+or use `docs/`; derive the repository name from the child root. Regeneration always updates the
 existing files **in place** — never create parallel copies, and remove docs and references for
 components that no longer exist.
 
@@ -27,7 +29,7 @@ components that no longer exist.
 
 1. **Follow the templates.** Every generated file keeps its template's heading structure; fill
    each section or state explicitly why it does not apply. Do not invent extra top-level
-   sections.
+   sections, except for the template's managed `## Panopticon analysis scope` section.
 2. **Never write `interfaces.md` yourself.** It is rendered from the local index so it can never
    disagree with it. After the index changes, run:
 
@@ -49,8 +51,22 @@ components that no longer exist.
    python3 -m panopticon.docs render --repo-name <repo> --component api --component worker ...
    ```
 
-6. **Keep the index current first.** Interface changes go into `panopticon/index.json` (see the
-   panopticon-index-schema skill and the panopticon-interface-naming skill for canonical names),
+6. **Load organization context and keep the index current first.** Before inferring or refreshing
+   interface names, load the configured instance's compiled interface index. Prefer the instance
+   checkout already available to the workflow; for a local run without a checkout, use the
+   configured instance identity and authenticated access:
+
+   ```bash
+   python3 -m panopticon.interface_lookup --instance <instance> \
+     --instance-root <instance-checkout> --output /tmp/panopticon-instance-interfaces.json
+   ```
+
+   Omit `--instance-root` when no checkout is available. A missing index in a fresh instance is an
+   empty context; an existing invalid or unreachable index stops the naming preflight with its
+   recovery instruction. Use that context with the `panopticon-interface-naming` skill, write any
+   reviewed naming judgments as source/configuration hints, and regenerate `panopticon/index.json`.
+   Only then render/update the four documentation layers. Interface changes go into
+   `panopticon/index.json` (see the panopticon-index-schema and panopticon-interface-naming skills),
    then docs are rendered/updated. Validate before finishing:
 
    ```bash
@@ -63,17 +79,25 @@ components that no longer exist.
    available; default `mermaid` when absent or no instance checkout is available locally) —
    depicting this repo's components and how they relate, same "ground every statement in the
    code" discipline as the rest of this layer. Do not invent components or relationships that
-   aren't in the code. Directly below the fenced block, add a markdown link back to this repo's
-   section in the org diagram: `` [org diagram](../architecture.md#{repo}) ``, where `{repo}` is
-   `panopticon/config.json`'s `repo` field (e.g. `repo: "svc-a"` → `[org diagram](../architecture.md#svc-a)`).
-   This is a *relative* link, not an absolute GitHub URL — this repo's docs are merged into the
-   instance repo at `docs/{repo}/` on every push (master-sync capability), landing this file at
-   `docs/{repo}/architecture.md` alongside the org diagram at `docs/architecture.md`, so
-   `../architecture.md` resolves correctly there. It will not resolve when viewed directly in this
-   repo before that merge — that's expected: architecture diagrams are reviewed in the instance
-   repo, not by browsing child repos in isolation. No node-level click-through inside the diagram —
-   GitHub's Mermaid renderer does not reliably support `click`-to-URL navigation; the back-link is a
-   plain markdown link, not a diagram directive.
+   aren't in the code. Directly below the fenced block, retain the relative
+   `[Panopticon analysis scope](operations.md#panopticon-analysis-scope)` link and add a markdown
+   link back to this repo's section in the org diagram. Run the command below and use its printed
+   URL verbatim:
+
+   ```bash
+   python3 -m panopticon.org_diagram_link
+   ```
+
+   For example, use `[org
+   diagram](https://github.com/acme/panopticon-instance/blob/main/docs/architecture.md#svc-a)`.
+   The URL is absolute so the link works both in this child repository and after its docs are
+   mirrored to `docs/{repo}/` in the instance repository. Do not re-derive the URL or write a
+   relative link to the org diagram. When refreshing an existing architecture overview, replace
+   any legacy relative org-diagram back-link with this resolver-produced absolute URL. Links between
+   documents within this child documentation tree remain relative to the document that contains them.
+   No node-level click-through inside the
+   diagram — GitHub's Mermaid renderer does not reliably support `click`-to-URL navigation; the
+   back-link is a plain markdown link, not a diagram directive.
 8. **Write the README architecture links.** At the top of `README.md`, write or refresh two markdown
    links, own-repo diagram directly above the org diagram, both labeled with the repo name (never a
    bare "architecture" — ambiguous once two links sit stacked):
@@ -84,15 +108,15 @@ components that no longer exist.
    ```
 
    The first is a relative link built from `panopticon/config.json`'s `repo` and `docs_location`
-   fields; like the diagram-section back-link (rule 7), it resolves once this repo's docs are merged
-   into the instance repo, not necessarily before. The second is a fully-qualified GitHub URL — run:
+   fields, or their first-time initialization derivation, and resolves in this child repository.
+   The second is a fully-qualified GitHub URL — run:
 
    ```bash
    python3 -m panopticon.org_diagram_link
    ```
 
    and use its printed line verbatim. Do not re-derive the URL or its fallback behavior yourself: the
-   script already implements the correct config-first, live-lookup-fallback, fail-loudly-never-guess
+   script already implements config-first, bootstrap-context fallback, and fail-loudly-never-guess
    logic (architecture-diagrams capability, "Org-diagram link script"). If the script exits non-zero,
    stop and report the error it printed rather than writing a partial or guessed link.
 9. **Resolve drift against docs you find, don't just flag it.** If existing documentation — this

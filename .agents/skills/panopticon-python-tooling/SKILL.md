@@ -23,17 +23,19 @@ simple as possible.
   state in the PR/design what it provides that the stdlib cannot, and pin it.
   Prefer zero-dependency tooling; treat each addition as a design decision,
   not a convenience.
-- **Checkout-and-run invocation.** Tooling must work on a bare CI runner with
+- **Checkout-and-run invocation.** Core and child-vendored tooling must work on a bare CI runner with
   a checkout and a system `python3` — no build step, no compiled extensions,
-  no framework bootstrapping. If dependencies exist, a single
-  `pip install -r requirements.txt` must be the entire setup.
+  no framework bootstrapping. A built-in provider adapter may have one pinned,
+  CI-only dependency file installed only by that provider's reusable workflow;
+  it must never enter child vendoring or local agent flows.
 - **Self-contained parsers.** Each deterministic parser must be independently
   contributable upstream to the template repo: no imports from org-specific
   code, no shared mutable state, dependencies limited to what the core
   tooling already requires.
-- **No heavy frameworks.** LLM access goes through the org-configured
-  endpoint (litellm-compatible HTTP first); do not add agent frameworks or
-  provider SDKs to the Python tooling.
+- **No heavy frameworks.** Do not add agent frameworks. Provider SDKs are
+  prohibited in core and child tooling; a built-in CI-only adapter may use one
+  narrowly scoped, pinned SDK when the standard library cannot implement the
+  provider's native authentication and transport contract.
 - **Importable logic, thin entry points.** Any script meant to be curl-runnable
   or invoked externally must put all logic in an importable module (e.g.,
   `panopticon/bootstrap.py`). The entry-point file (`install.py`) is a single
@@ -44,8 +46,17 @@ simple as possible.
   implementation as the default (e.g., `def fetch(url, urlopen=urllib.request.urlopen)`).
   Tests inject a mock; production callers pass nothing. Never patch at the module
   level when injection is possible.
+- **Hermetic tests.** The standard test suite SHALL run without network access,
+  DNS, GitHub API credentials, or TCP/UDP socket binding. Inject URL/API
+  transports and use in-memory response fakes for HTTP behavior, including
+  success, retry, timeout, and failure cases. Do not make a test pass by
+  skipping it when the environment lacks network or socket access.
 - **Initialization flag last.** `panopticon/config.json` (and any equivalent
   completion sentinel) must be the absolute last artifact written, only after all
   validation passes. If validation fails, the flag must not exist. Tests that check
   this invariant must confirm the flag is absent on failure and present on success
   in a single test (not two independent tests that can drift).
+- **Test source mutations must take effect.** When a test derives altered source
+  text with replacement, target text that exists in the current source and assert
+  that the derived source differs before executing it; otherwise the test can
+  silently exercise the unmodified path.

@@ -2,268 +2,788 @@
 
 All notable changes to Panopticon are documented in this file.
 
-## [0.1.4] - 2026-07-15
+## [harden-rollout-preflight-feedback] - 2026-08-07
 
-`panopticon-init` now wires dependency indexing into the standard initialization flow, so every
-newly initialized repo gets a populated dependency index alongside its interface index instead of
-requiring dependency indexing as a separate, easy-to-forget manual step. Established across
-`openspec/changes/init-dependency-steps`.
+### Changed
+
+- Private reusable-workflow preflight guidance now identifies the required
+  instance-repository token permissions, valid access response field, and
+  recovery for authentication failures.
+
+### Fixed
+
+- Provider workflow configuration failures now emit GitHub error annotations on
+  stdout while retaining actionable step summaries.
+
+## [add-org-aware-interface-naming] - 2026-08-06
 
 ### Added
 
+- Organization-aware interface naming now consults the instance compiled index
+  and persists reviewed naming hints before deterministic index generation.
+- Provider PR reports now include bounded instance-index candidate analysis and
+  the child's Mermaid architecture diagram in the maintained report comment.
+
+### Changed
+
+- Child repositories can override `gating.interface-conflict` as `advisory` or
+  `blocking`; both modes publish prominent warnings, while only blocking fails
+  the conflict check.
+- Deterministic extraction, simulation, and compilation remain independent of
+  the LLM and instance index after a naming hint is saved.
+
+## [add-negative-scope-and-ignore-hints] - 2026-08-03
+
+### Added
+
+- Deterministic analysis-scope rules exclude illustrative paths and explicit
+  file or declaration annotations from interface, dependency, and doc-drift
+  analysis.
+
+### Changed
+
+- Generated operations documentation now lists the repository's excluded
+  directories, and architecture diagrams link to that scope explanation.
+
+## [harden-bootstrap-manifest-and-workflow-ci] - 2026-08-03
+
+### Added
+
+- Credential-free template CI now validates every reusable workflow contract
+  and runs the full Python test suite for pull requests, pushes, and manual
+  dispatches.
+
+### Changed
+
+- Child bootstrap, sync, and tooling-currency now use a validated versioned
+  JSON local-tooling manifest from the authoritative instance source.
+
+### Fixed
+
+- Uncustomized instance bootstrap no longer depends on an executable manifest
+  module that the default payload loader does not load.
+
+## [model-effective-provider-requirements] - 2026-08-02
+
+### Added
+
+- Trusted optional-provider value resolution with fixed instance-action and
+  instance-configuration defaults, plus a source-safe integrator guide.
+
+### Changed
+
+- Child callers and reusable provider workflows now report the effective source
+  of each request budget; job timeout is resolved before job creation.
+- Bootstrap and finalization now distinguish required organization settings from
+  optional values supplied by a trusted default.
+
+## [complete-rollout-status-and-legacy-tooling-guidance] - 2026-08-02
+
+### Added
+
+- Advisory detection for instance-excluded and child-only Python tooling in
+  child synchronization and tooling-currency checks.
+
+### Changed
+
+- Rollout documentation now records implementation status, current verification
+  evidence, and a reviewed migration process for legacy child tooling.
+
+## [restrict-child-sync-tooling-manifest] - 2026-08-02
+
+### Changed
+
+- Child tooling sync now retrieves the instance-owned manifest on every run
+  and updates only its listed modules, excluding CI-only and child-owned files.
+
+## [fix-bedrock-converse-request-shape] - 2026-08-01
+
+### Fixed
+
+- Bedrock Converse requests now omit unsupported optional inference parameters.
+
+## [harden-bedrock-workflow-contract] - 2026-08-01
+
+### Added
+
+- Deterministic validation for declared caller inputs and secrets in reusable
+  provider PR workflows.
+
+### Fixed
+
+- Bedrock PR evaluation no longer requires LiteLLM endpoint or API-key caller
+  configuration.
+
+## [fix-resource-sync-merged-pr] - 2026-07-26
+
+### Fixed
+
+- Child resource sync now opens a new review pull request after its prior
+  automation pull request is merged or closed.
+
+## [sync-child-workflow-callers] - 2026-07-26
+
+### Fixed
+
+- Child resource sync now stages the complete managed `panopticon/` directory,
+  restores missing managed workflow callers, and preserves child-owned files.
+
+## [surface-org-interface-conflicts] - 2026-07-26
+
+### Added
+
+- Organization architecture now inventories every participating repository
+  interface and highlights confirmed conflicts and potential same-name/type
+  collisions.
+
+## [add-shared-child-resource-sync] - 2026-07-26
+
+### Added
+
+- A manual child resource-sync workflow that refreshes managed skills and
+  vendored tooling through a reviewable pull request instead of directly
+  changing the default branch.
+
+## [enforce-architecture-link-protocol] - 2026-07-26
+
+### Fixed
+
+- Generated child README and architecture-overview links now consistently use
+  the resolver-produced absolute organization-diagram URL; local and
+  org-to-child links retain their context-relative paths.
+
+## [prevent-doc-drift-false-positives] - 2026-07-26
+
+### Fixed
+
+- Documentation-only pull requests now pass the doc-drift check without an LLM
+  request. Stale-doc findings must cite a changed behavior-bearing file and a
+  required update; invalid findings report an operational failure instead.
+
+## [fix-diagram-link-contexts] - 2026-07-26
+
+### Fixed
+
+- Child architecture documentation now uses direct, anchored GitHub links to
+  the organization diagram, while links within child documentation remain
+  relative and work in both child and instance repositories.
+
+## [add-openai-provider-workflows] - 2026-07-26
+
+### Added
+
+- Direct OpenAI configuration and reusable PR-evaluation workflows, with a
+  fixed `https://api.openai.com/v1` endpoint and an OpenAI Platform API key.
+- Child bootstrap now generates callers for the selected OpenAI provider.
+
+### Changed
+
+- The public launcher, bootstrap, and local sync honor GitHub-provided
+  rate-limit waits without shortening them. Installation guidance now recommends
+  GitHub authentication for public as well as private instances.
+
+## [default-optional-llm-env-vars] - 2026-07-25
+
+### Fixed (LLM request budgets)
+
+- LiteLLM and Bedrock PR workflows now apply the documented request timeout,
+  transport-attempt, and correction-attempt defaults in every LLM check step
+  when the corresponding optional organization variable is unavailable.
+
+## [add-github-rate-limit-retries] - 2026-07-25
+
+### Added (initialization)
+
+- `/panopticon-init` now continues from index work through documentation
+  generation and finalization in one invocation, deriving required bootstrap
+  context without writing the initialization flag early.
+
+### Fixed (GitHub API recovery)
+
+- The public launcher, bootstrap, and local sync now recognize GitHub
+  rate-limit responses, wait for `Retry-After` or the reset time when supplied,
+  and retry without exposing tokens or response bodies.
+
+## [fix-vendored-provider-and-init-report] - 2026-07-25
+
+### Fixed (initialization)
+
+- Child bootstrap and tooling sync now include the provider registry required by
+  local documentation and finalization commands.
+- Finalization now leaves a concise, actionable initialization report for both
+  successful and blocked runs.
+
+## [fix-bootstrap-provider-loader] - 2026-07-25
+
+### Fixed (bootstrap)
+
+- Restored uncustomized instance bootstrap by loading the provider registry
+  before the default bootstrap module runs.
+
+## [fix-template-sync-recovery] - 2026-07-25
+
+### Fixed (template synchronization)
+
+- Corrected protected-path attribute generation so customized generated and
+  organization-declared files remain protected during template merges.
+- Made template-sync failures identify the failing stage, report the detected
+  error, and provide actionable local recovery steps.
+
+## [split-provider-configuration-workflows] - 2026-07-24
+
+### Added
+
+- Instance-owned **Configure Panopticon — LiteLLM** and **Configure Panopticon —
+  Bedrock** workflows with
+  configurable organization secret/variable names; the template no longer
+  selects a provider implicitly.
+- Separate LiteLLM and native Bedrock Converse/OIDC reusable PR workflows,
+  including provider preflight,
+  caller configuration revisions, and a pinned CI-only boto3 dependency.
+- Shared recovery formatting is vendored after successful child bootstrap, with
+  self-contained
+  fallbacks for legacy callers and failures that occur before vendoring.
+
+### Changed
+
+- Provider configuration now uses fixed LiteLLM and Bedrock entrypoints that
+  show only relevant fields,
+  share one validated persistence action, and provide both recovery paths when
+  an instance is unconfigured.
+- Bedrock setup now offers a clear choice between direct GitHub OIDC (AWS region
+  plus IAM role ARN)
+  and a fixed instance-managed credentials action; the latter requires neither
+  AWS organization variable.
+- Child bootstrap validates provider configuration before writing, maps
+  organization names explicitly
+  without `secrets: inherit`, and prints complete Actions-console, `gh`, and
+  exact child-bootstrap recovery.
+- The legacy PR workflow now fails loudly with migration instructions so stale
+  child callers never run
+  against an accidental provider contract.
+- Instance template synchronization now delegates to a fixed, template-owned
+  reusable workflow, allowing
+  synchronization fixes to take effect on the next run without first updating
+  each instance caller.
+- Template sync now keeps explicit `protected_paths`, the protected diagram
+  configuration, and an
+  existing generated organization diagram; unprotected template-managed
+  customizations can update or
+  conflict.
+- The README now ends with a video thumbnail whose external YouTube link opens
+  in a new browser tab.
+
+### Fixed
+
+- Configuration, provider evaluation, merge synchronization, and PR cleanup
+  workflows now put actionable
+  failure reasons and recovery instructions in the GitHub Actions step summary.
+- Configure Panopticon now imports its checked-out Python tooling successfully
+  on clean GitHub-hosted
+  runners.
+
+## [add-contribution-guidelines] - 2026-07-24
+
+### Added (contribution guidance)
+
+- Root contribution guidelines with an OpenSpec lifecycle, artifact map, and
+  commands for inspecting, validating, and progressing changes.
+- README documentation link to the contribution guidelines, focused parser and
+  testing references, and Markdown validation guidance using `markdownlint-cli2`.
+
+## [0.1.6] - 2026-07-19
+
+### Changed (section 60)
+
+**Agent runtime** (`agent-runtime`)
+
+- CI LLM request timeout and retry budgets are now optional, bounded
+  organization-level variables. Defaults
+  allow 90 seconds per request, two transport attempts, and two
+  structured-response correction retries;
+  invalid values fail before an LLM request is sent.
+
+**PR evaluation** (`pr-evaluation`)
+
+- The reusable PR workflow now has a configurable 20-minute default job timeout
+  and passes the request-budget
+  variables to its LLM-backed checks. LiteLLM proxy guidance now keeps its
+  timeout slightly above Panopticon's
+  client timeout so failures remain actionable.
+
+## [0.1.5] - 2026-07-18
+
+The public installer now dispatches securely to instance-owned installers for
+both public and private
+repositories, and template sync preserves the instance-generated organization
+diagram. Established
+across `add-template-installer-wrapper` and `fix-org-diagram-template-sync`.
+
+### Changed (section 86)
+
 **Repo initialization** (`repo-initialization`)
-- `panopticon-init`'s orchestration grows from four steps to six: `panopticon-dependency-naming`
-  and `panopticon-dependency-extraction` now run between interface extraction and doc generation,
-  so a `panopticon-dependency-of` hint can reference an already-built interface index and
+
+- A single public template launcher now supports public and private instance
+  repositories. It resolves
+  the instance, ref, and authentication before handing control to the
+  instance-owned installer, allowing
+  customized installers to retain their own prompts, parameters, and behavior.
+- The launcher accepts GitHub Contents API line-wrapped base64 while retaining
+  strict base64 and UTF-8
+  validation, and keeps prompted or configured tokens out of URLs, command
+  arguments, output, errors,
+  and persistent storage.
+
+**Architecture diagrams** (`architecture-diagrams`)
+
+- Template sync now classifies `docs/architecture.md` as a fixed,
+  template-declared but instance-owned
+  generated path. Existing instance diagrams win merges, while the template
+  placeholder is installed
+  when an instance does not yet have the file.
+
+### Fixed (section 109)
+
+- Routine and first-time template sync no longer conflict on or overwrite an
+  instance's generated
+  `docs/architecture.md`; the workflow registers `merge=ours` in
+  `.git/info/attributes` before merging
+  without misclassifying the path as protected JSON configuration or org
+  customization.
+- The public installer no longer rejects valid GitHub Contents API payloads
+  solely because their base64
+  content contains transport line wrapping.
+
+## [0.1.4] - 2026-07-15
+
+`panopticon-init` now wires dependency indexing into the standard initialization
+flow, so every
+newly initialized repo gets a populated dependency index alongside its interface
+index instead of
+requiring dependency indexing as a separate, easy-to-forget manual step.
+Established across
+`openspec/changes/init-dependency-steps`.
+
+### Added (section 131)
+
+**Repo initialization** (`repo-initialization`)
+
+- `panopticon-init`'s orchestration grows from four steps to six:
+  `panopticon-dependency-naming`
+  and `panopticon-dependency-extraction` now run between interface extraction
+  and doc generation,
+  so a `panopticon-dependency-of` hint can reference an already-built interface
+  index and
   generated docs include dependency edges from the first `/panopticon-init` run.
-- The checkpoint log (`panopticon/.init-log.json`) tracks the two new steps, preserving resumable
+- The checkpoint log (`panopticon/.init-log.json`) tracks the two new steps,
+  preserving resumable
   init across an interrupted agent session.
 
 ### Notes
 
-- End-to-end verification of a full `/panopticon-init` run against a real repo with genuine
-  internal dependencies is deferred to the next real initialization — no fixture child+instance
-  repo pair with a real cross-repo dependency exists in this workspace, and the orchestration is
+- End-to-end verification of a full `/panopticon-init` run against a real repo
+  with genuine
+  internal dependencies is deferred to the next real initialization — no fixture
+  child+instance
+  repo pair with a real cross-repo dependency exists in this workspace, and the
+  orchestration is
   agent-followed skill instructions with no Python test harness to simulate it.
 
 ## [0.1.3] - 2026-07-15
 
-Discoverable architecture-diagram links at the top of every instance and child repo README, and a
-non-dead placeholder org diagram for a freshly created instance. Established across
+Discoverable architecture-diagram links at the top of every instance and child
+repo README, and a
+non-dead placeholder org diagram for a freshly created instance. Established
+across
 `openspec/changes/readme-architecture-links`.
 
-### Added
+### Added (section 164)
 
 **Architecture diagrams** (`architecture-diagrams`)
-- Child repo `README.md` now links to both diagrams at the top, own-repo above org: a relative link to
-  this repo's own `architecture.md`, and a fully-qualified GitHub URL to the org diagram — obtained by
-  running `python3 -m panopticon.org_diagram_link` and using its printed output verbatim, so the two can
-  never disagree — written by `panopticon-doc-generation` as part of its normal architecture-overview
+
+- Child repo `README.md` now links to both diagrams at the top, own-repo above
+  org: a relative link to
+  this repo's own `architecture.md`, and a fully-qualified GitHub URL to the org
+  diagram — obtained by
+  running `python3 -m panopticon.org_diagram_link` and using its printed output
+  verbatim, so the two can
+  never disagree — written by `panopticon-doc-generation` as part of its normal
+  architecture-overview
   pass.
-- Instance repo `README.md` now links to the org diagram at the top (`docs/architecture.md`) only — no
-  per-child-repo links, since the org diagram itself already enumerates every repo.
-- `write_org_diagram` renders an explicit empty-state placeholder — a link to initializing a child repo
-  plus a hexagon of six `?` nodes — in place of a bare "no relationships yet" line, produced by the same
+- Instance repo `README.md` now links to the org diagram at the top
+  (`docs/architecture.md`) only — no
+  per-child-repo links, since the org diagram itself already enumerates every
+  repo.
+- `write_org_diagram` renders an explicit empty-state placeholder — a link to
+  initializing a child repo
+  plus a hexagon of six `?` nodes — in place of a bare "no relationships yet"
+  line, produced by the same
   deterministic render path every run rather than written once and left stale.
-- The template repo ships that placeholder `docs/architecture.md` directly, so a freshly created
-  instance repo's architecture link is never dead even before any child repo has merged; its own
-  `README.md` Overview section now carries org-agnostic instance-appropriate text plus a maintainer note,
-  replacing template self-description that no longer applies once copied into an instance repo via "Use
+- The template repo ships that placeholder `docs/architecture.md` directly, so a
+  freshly created
+  instance repo's architecture link is never dead even before any child repo has
+  merged; its own
+  `README.md` Overview section now carries org-agnostic instance-appropriate
+  text plus a maintainer note,
+  replacing template self-description that no longer applies once copied into an
+  instance repo via "Use
   this template."
 
 ## [0.1.2] - 2026-07-14
 
-Internal (same-org) library/package dependency tracking, as a relationship distinct from runtime
-interfaces, with its own schema, parsers, merge/conflict detection, and combined org-diagram
+Internal (same-org) library/package dependency tracking, as a relationship
+distinct from runtime
+interfaces, with its own schema, parsers, merge/conflict detection, and combined
+org-diagram
 rendering. Established across `openspec/changes/track-internal-dependencies`.
 
-### Added
+### Added (section 204)
 
 **Dependency indexing** (`dependency-indexing`, new capability)
-- Separate JSON index schema (`dependencies/{repo}.json` shards, `dependencies/index.json`
-  compiled) — own files, never recorded as an interface `type` — with `owner`/`producer`/`consumer`
-  and, on consumer repo objects, `apis`: a deduplicated, sorted list of the specific modules the
+
+- Separate JSON index schema (`dependencies/{repo}.json` shards,
+  `dependencies/index.json`
+  compiled) — own files, never recorded as an interface `type` — with
+  `owner`/`producer`/`consumer`
+  and, on consumer repo objects, `apis`: a deduplicated, sorted list of the
+  specific modules the
   consumer imports (import-level granularity, not call-site).
-- Layered internality detection, most portable first: zero-configuration structural resolution for
-  ecosystems whose declarations embed the org's own GitHub identity (Go module paths under
-  `github.com/{org}/...`, the first deterministic parser); an org-declared `internal_registries`
-  config field, reused for both consumer-side detection and producer self-registration; a
-  no-checkout instance cross-reference (a plain filesystem read in CI, since the shared workflows
-  already check out the instance repo; a best-effort live GitHub API read locally); and a
-  `panopticon-dependency` hint / LLM fallback for anything else, with the same parser-gap
+- Layered internality detection, most portable first: zero-configuration
+  structural resolution for
+  ecosystems whose declarations embed the org's own GitHub identity (Go module
+  paths under
+  `github.com/{org}/...`, the first deterministic parser); an org-declared
+  `internal_registries`
+  config field, reused for both consumer-side detection and producer
+  self-registration; a
+  no-checkout instance cross-reference (a plain filesystem read in CI, since the
+  shared workflows
+  already check out the instance repo; a best-effort live GitHub API read
+  locally); and a
+  `panopticon-dependency` hint / LLM fallback for anything else, with the same
+  parser-gap
   reporting contract as interfaces.
-- `panopticon-dependency-of <interface-name>` hint: links a dependency that's really a
-  packaged/generated client for an interface this org already tracks — never inferred from naming
+- `panopticon-dependency-of <interface-name>` hint: links a dependency that's
+  really a
+  packaged/generated client for an interface this org already tracks — never
+  inferred from naming
   conventions, only set explicitly.
 - Shard replace, deterministic compiled-index rebuild, and conflict detection
-  (`ownership-dispute`, and the dependency-specific `unregistered-producer`: an internal candidate
+  (`ownership-dispute`, and the dependency-specific `unregistered-producer`: an
+  internal candidate
   with consumers but no self-registered producer anywhere).
-- `docs/hint-reference.md`: syntax, placement, and effect for every hint form in the tooling
+- `docs/hint-reference.md`: syntax, placement, and effect for every hint form in
+  the tooling
   (`panopticon-interface`, `panopticon-dependency`, `panopticon-dependency-of`).
 
 **Architecture diagrams** (`architecture-diagrams`)
-- The org diagram now renders dependency edges alongside interface edges in one combined section
-  per repo — dashed for interfaces, solid for dependencies — and collapses a dependency linked to
+
+- The org diagram now renders dependency edges alongside interface edges in one
+  combined section
+  per repo — dashed for interfaces, solid for dependencies — and collapses a
+  dependency linked to
   an interface via `panopticon-dependency-of` into a single edge instead of two.
 
-### Notes
+### Notes (section 251)
 
-- CI workflow wiring (the shared `panopticon-pr.yml`/`panopticon-merge.yml` invoking the new
-  extraction/merge tooling automatically) is not yet included — local/manual use of
-  `python3 -m panopticon.dependency_extraction` / `dependency_merge` is fully supported today,
-  matching the existing precedent that full-repo interface extraction is also local-only.
+- CI workflow wiring (the shared `panopticon-pr.yml`/`panopticon-merge.yml`
+  invoking the new
+  extraction/merge tooling automatically) is not yet included — local/manual use
+  of
+  `python3 -m panopticon.dependency_extraction` / `dependency_merge` is fully
+  supported today,
+  matching the existing precedent that full-repo interface extraction is also
+  local-only.
 
 ## [0.1.1] - 2026-07-12
 
-Tooling-currency detection for child repos, plus robustness fixes surfaced by exercising the
-0.1.0 release end-to-end. Established across `openspec/changes/tooling-currency` and
+Tooling-currency detection for child repos, plus robustness fixes surfaced by
+exercising the
+0.1.0 release end-to-end. Established across `openspec/changes/tooling-currency`
+and
 `openspec/changes/robust-llm-verdicts`.
 
-### Added
+### Added (section 270)
 
 **Tooling currency** (`tooling-currency`, new capability)
-- Advisory-only PR check warning when a child repo's wired workflow ref, downloaded skills, or
-  vendored local tooling have drifted from the instance repo's current default branch —
-  content-based comparison only, never timestamps, and never gated or folded into the combined
+
+- Advisory-only PR check warning when a child repo's wired workflow ref,
+  downloaded skills, or
+  vendored local tooling have drifted from the instance repo's current default
+  branch —
+  content-based comparison only, never timestamps, and never gated or folded
+  into the combined
   TL;DR report.
-- `python3 -m panopticon.sync`: pulls the instance's current skills and tooling into an
-  already-bootstrapped child repo on demand, overwriting unconditionally (git review is the
-  safety net); `--check-updates` reports what would change via a git-blob-hash comparison without
+- `python3 -m panopticon.sync`: pulls the instance's current skills and tooling
+  into an
+  already-bootstrapped child repo on demand, overwriting unconditionally (git
+  review is the
+  safety net); `--check-updates` reports what would change via a git-blob-hash
+  comparison without
   writing anything.
-- Org-declared `protected_paths` in `panopticon.config.json`: arbitrary instance-level
-  customizations (skills, tooling modules) excluded from `sync-from-template`'s merge via
-  `.git/info/attributes` (never a commit, never the tracked `.gitattributes`), printed to the sync
-  run's step summary since the protection itself is invisible in the tracked tree.
+- Org-declared `protected_paths` in `panopticon.config.json`: arbitrary
+  instance-level
+  customizations (skills, tooling modules) excluded from `sync-from-template`'s
+  merge via
+  `.git/info/attributes` (never a commit, never the tracked `.gitattributes`),
+  printed to the sync
+  run's step summary since the protection itself is invisible in the tracked
+  tree.
 
 **Repo initialization** (`repo-initialization`)
-- `PANOPTICON.md`: a concise, static getting-started guide downloaded to every child repo's root
-  on bootstrap, covering the three repo roles, where architecture diagrams live, and how to run
-  the sync script; the bootstrap script's printed output now names both on every run.
-- `panopticon/config.json` gains `instance_default_branch`, resolved via the same GitHub
-  token/transport mechanism the bootstrap script already uses for every other request (never a
-  `gh api` subprocess call, which depends on `gh auth login` specifically) — refreshed in place on
+
+- `PANOPTICON.md`: a concise, static getting-started guide downloaded to every
+  child repo's root
+  on bootstrap, covering the three repo roles, where architecture diagrams live,
+  and how to run
+  the sync script; the bootstrap script's printed output now names both on every
+  run.
+- `panopticon/config.json` gains `instance_default_branch`, resolved via the
+  same GitHub
+  token/transport mechanism the bootstrap script already uses for every other
+  request (never a
+  `gh api` subprocess call, which depends on `gh auth login` specifically) —
+  refreshed in place on
   every bootstrap rerun of an already-initialized repo.
-- Bootstrap now writes `panopticon/.gitignore` (`__pycache__/`) alongside the vendored local-tooling
-  modules, so running them (as the bundled skills instruct) never leaves compiled bytecode staged
+- Bootstrap now writes `panopticon/.gitignore` (`__pycache__/`) alongside the
+  vendored local-tooling
+  modules, so running them (as the bundled skills instruct) never leaves
+  compiled bytecode staged
   on the next `git add -A`.
 
 **Architecture diagrams** (`architecture-diagrams`)
-- `python3 -m panopticon.org_diagram_link`: prints an immediately clickable link to a child repo's
-  section of the org-wide diagram, for use before that repo's docs have been merged into the
-  instance (the embedded in-doc link only resolves after merge). Reads local config first with no
+
+- `python3 -m panopticon.org_diagram_link`: prints an immediately clickable link
+  to a child repo's
+  section of the org-wide diagram, for use before that repo's docs have been
+  merged into the
+  instance (the embedded in-doc link only resolves after merge). Reads local
+  config first with no
   network call; falls back to a live lookup only when needed.
 
 **Agent runtime** (`agent-runtime`)
-- Structured LLM responses (doc-drift, index-currency, interface-extraction verdicts) now recover
-  from a non-compliant first response via one shared, bounded corrective-retry method instead of
-  failing outright — the model's non-compliant answer plus a specific correction are appended to
-  the conversation and retried before failing loudly. No provider-specific request parameters, so
+
+- Structured LLM responses (doc-drift, index-currency, interface-extraction
+  verdicts) now recover
+  from a non-compliant first response via one shared, bounded corrective-retry
+  method instead of
+  failing outright — the model's non-compliant answer plus a specific correction
+  are appended to
+  the conversation and retried before failing loudly. No provider-specific
+  request parameters, so
   this works across any litellm-compatible endpoint.
 
-### Fixed
+### Fixed (section 340)
 
-- Child repo's `## Architecture diagram` section linked back to the org diagram with a malformed,
-  non-resolving URL (missing GitHub's required `/blob/<branch>/` path segment); corrected to a
+- Child repo's `## Architecture diagram` section linked back to the org diagram
+  with a malformed,
+  non-resolving URL (missing GitHub's required `/blob/<branch>/` path segment);
+  corrected to a
   relative link that resolves once merged into the instance repo.
-- A model responding with prose reasoning instead of a JSON verdict crashed the doc-drift check
-  outright with no recovery path — now corrected via retry (see agent-runtime, above).
-- `instance_default_branch` resolution depended on `gh auth login` having been run interactively,
-  a stricter precondition than the token-based auth the bootstrap script's own downloads already
-  relied on successfully — a working `GH_TOKEN`/`GITHUB_TOKEN` now resolves it directly.
-- The org diagram's links to each child repo's own diagram used the href `docs/{repo}/architecture.md`,
-  but the org diagram file itself already lives inside `docs/`, so GitHub resolved that relative link
-  to the non-existent `docs/docs/{repo}/architecture.md` — every such link 404'd. Corrected to the
+- A model responding with prose reasoning instead of a JSON verdict crashed the
+  doc-drift check
+  outright with no recovery path — now corrected via retry (see agent-runtime,
+  above).
+- `instance_default_branch` resolution depended on `gh auth login` having been
+  run interactively,
+  a stricter precondition than the token-based auth the bootstrap script's own
+  downloads already
+  relied on successfully — a working `GH_TOKEN`/`GITHUB_TOKEN` now resolves it
+  directly.
+- The org diagram's links to each child repo's own diagram used the href
+  `docs/{repo}/architecture.md`,
+  but the org diagram file itself already lives inside `docs/`, so GitHub
+  resolved that relative link
+  to the non-existent `docs/docs/{repo}/architecture.md` — every such link
+  404'd. Corrected to the
   literal relative href `{repo}/architecture.md`.
 
 ## [0.1.0] - 2026-07-10
 
-First usable release: an org-wide interface catalog and documentation system, initialized from a
-GitHub template, with LLM-assisted extraction/naming, deterministic conflict detection, and CI
-gating for pull requests. Established across `openspec/changes/establish-panopticon-core`.
+First usable release: an org-wide interface catalog and documentation system,
+initialized from a
+GitHub template, with LLM-assisted extraction/naming, deterministic conflict
+detection, and CI
+gating for pull requests. Established across
+`openspec/changes/establish-panopticon-core`.
 
-### Added
+### Added (section 374)
 
 **Interface indexing** (`interface-indexing`)
-- JSON index schema (`schema_version`, name-keyed interface objects with `owner`, `type`,
-  `consumer`/`producer` repo lists), describing code state — not deployment state — on a branch.
-- Deterministic parser registry (`detect`/`extract` contract), with starter parsers for
+
+- JSON index schema (`schema_version`, name-keyed interface objects with
+  `owner`, `type`,
+  `consumer`/`producer` repo lists), describing code state — not deployment
+  state — on a branch.
+- Deterministic parser registry (`detect`/`extract` contract), with starter
+  parsers for
   REST/OpenAPI and Kafka topic configs.
-- LLM extraction fallback for interface types with no deterministic parser, tagged
-  `extracted_by: "llm"`, with parser-gap recommendations surfaced in the CI summary.
-- Name normalization and matching: deterministic rules plus local LLM judgment, persisted as
-  `panopticon-interface` hint comments; CI resolves names from hints and rules alone, with no LLM
+- LLM extraction fallback for interface types with no deterministic parser,
+  tagged
+  `extracted_by: "llm"`, with parser-gap recommendations surfaced in the CI
+  summary.
+- Name normalization and matching: deterministic rules plus local LLM judgment,
+  persisted as
+  `panopticon-interface` hint comments; CI resolves names from hints and rules
+  alone, with no LLM
   judgment calls during compile.
 - Shard replace + deterministic compiled-index rebuild, and conflict detection
-  (`ownership-dispute`, `owner-attribution-mismatch`) recomputed on every rebuild.
+  (`ownership-dispute`, `owner-attribution-mismatch`) recomputed on every
+  rebuild.
 
 **Agent runtime** (`agent-runtime`)
-- Provider-agnostic, stdlib-only LLM client for CI (litellm-compatible `/chat/completions`), with
-  retries and fail-loud behavior on missing configuration or unreachable endpoints.
-- Skill-based prompting: the same markdown skill files drive both CI and local agent-harness
+
+- Provider-agnostic, stdlib-only LLM client for CI (litellm-compatible
+  `/chat/completions`), with
+  retries and fail-loud behavior on missing configuration or unreachable
+  endpoints.
+- Skill-based prompting: the same markdown skill files drive both CI and local
+  agent-harness
   execution, so behavior is versioned once and shared between the two.
 
 **Documentation generation** (`doc-generation`)
-- Four generated documentation layers per repo (architecture overview, per-component docs,
-  interface docs, operational docs), regenerated in place with no stale sections left behind.
-- Interface docs are deterministically rendered from the local index — never hand-edited or
+
+- Four generated documentation layers per repo (architecture overview,
+  per-component docs,
+  interface docs, operational docs), regenerated in place with no stale sections
+  left behind.
+- Interface docs are deterministically rendered from the local index — never
+  hand-edited or
   LLM-authored — so they can never disagree with it.
-- LLM-based doc-drift check for CI, with self-contained, actionable remediation instructions
-  (exact command/skill per stale doc) in the GitHub Actions summary and PR comment; now also
-  judges the architecture overview's `## Architecture diagram` section for staleness the same way
+- LLM-based doc-drift check for CI, with self-contained, actionable remediation
+  instructions
+  (exact command/skill per stale doc) in the GitHub Actions summary and PR
+  comment; now also
+  judges the architecture overview's `## Architecture diagram` section for
+  staleness the same way
   as its prose.
-- Initialization-time drift resolution: local agent runs revise documentation that contradicts the
-  current repo state, recording what was resolved in `panopticon-changelog.md` rather than
-  cluttering the docs themselves; genuinely ambiguous cases prompt the user instead of guessing.
+- Initialization-time drift resolution: local agent runs revise documentation
+  that contradicts the
+  current repo state, recording what was resolved in `panopticon-changelog.md`
+  rather than
+  cluttering the docs themselves; genuinely ambiguous cases prompt the user
+  instead of guessing.
 
 **Architecture diagrams** (`architecture-diagrams`)
-- Agent-drawn `## Architecture diagram` section in every repo's architecture overview — a
-  component/data-flow diagram in the org's configured format (default Mermaid), grounded in the
+
+- Agent-drawn `## Architecture diagram` section in every repo's architecture
+  overview — a
+  component/data-flow diagram in the org's configured format (default Mermaid),
+  grounded in the
   actual code, with a back-link to the org diagram.
-- Deterministic, LLM-free org-wide diagram (`docs/architecture.md` in the instance repo): one
-  section per repo with cross-repo interfaces, a relationship diagram, and an interface table,
-  rebuilt on every merge to main directly from the compiled index so it can never disagree with
-  it. Interfaces used only within a single repo are excluded from the org diagram.
-- Diagram rendering format is configurable per instance (`panopticon.diagram.config.json`,
-  default `mermaid`); an unsupported configured format fails loudly rather than silently skipping
+- Deterministic, LLM-free org-wide diagram (`docs/architecture.md` in the
+  instance repo): one
+  section per repo with cross-repo interfaces, a relationship diagram, and an
+  interface table,
+  rebuilt on every merge to main directly from the compiled index so it can
+  never disagree with
+  it. Interfaces used only within a single repo are excluded from the org
+  diagram.
+- Diagram rendering format is configurable per instance
+  (`panopticon.diagram.config.json`,
+  default `mermaid`); an unsupported configured format fails loudly rather than
+  silently skipping
   diagram generation.
-- Navigation between the org diagram and per-repo diagrams uses plain markdown links, not
-  diagram-native `click` directives, since GitHub does not reliably support Mermaid click-to-URL
+- Navigation between the org diagram and per-repo diagrams uses plain markdown
+  links, not
+  diagram-native `click` directives, since GitHub does not reliably support
+  Mermaid click-to-URL
   navigation.
 
 **Repo initialization** (`repo-initialization`)
-- Stdlib-only bootstrap installer (`install.py`), runnable via `curl | python3` with no local
-  instance clone, including piped-execution self-bootstrapping and a GitHub API retry/backoff
+
+- Stdlib-only bootstrap installer (`install.py`), runnable via `curl | python3`
+  with no local
+  instance clone, including piped-execution self-bootstrapping and a GitHub API
+  retry/backoff
   contract for transient failures.
-- Interactive skills-location selection (arrow-key menu with typed fallback, environment-variable
+- Interactive skills-location selection (arrow-key menu with typed fallback,
+  environment-variable
   override, idempotent re-run reuse) across every supported agent-harness tool.
-- `panopticon-init` orchestrating skill sequencing interface naming, extraction, doc generation,
+- `panopticon-init` orchestrating skill sequencing interface naming, extraction,
+  doc generation,
   and finalization in dependency order, with a resumable checkpoint log.
-- Three-phase initialization (deterministic bootstrap → AI-driven agent pass → deterministic
+- Three-phase initialization (deterministic bootstrap → AI-driven agent pass →
+  deterministic
   finalization), writing `panopticon/config.json` only after validation passes.
-- Default-branch workflow-ref resolution requiring no manual tagging step on a fresh instance,
+- Default-branch workflow-ref resolution requiring no manual tagging step on a
+  fresh instance,
   with org-configurable pinning.
-- General protected-instance-local-config mechanism: `sync-from-template.yml` excludes registered
-  paths (starting with `panopticon.diagram.config.json`) from its merge via a `.gitattributes`
-  `merge=ours` driver, so an instance's customization always wins over what the template ships,
-  and warns (non-blocking) when the template adds or removes a field the instance hasn't picked up.
+- General protected-instance-local-config mechanism: `sync-from-template.yml`
+  excludes registered
+  paths (starting with `panopticon.diagram.config.json`) from its merge via a
+  `.gitattributes`
+  `merge=ours` driver, so an instance's customization always wins over what the
+  template ships,
+  and warns (non-blocking) when the template adds or removes a field the
+  instance hasn't picked up.
 
 **PR evaluation** (`pr-evaluation`)
-- Reusable PR workflow: initialization check, doc-drift check, index-currency check, a
-  deterministic diagram-existence check (architecture diagram section present and well-formed, no
-  LLM call), pre-merge index simulation (dry-run over the same merge code path as the real merge),
+
+- Reusable PR workflow: initialization check, doc-drift check, index-currency
+  check, a
+  deterministic diagram-existence check (architecture diagram section present
+  and well-formed, no
+  LLM call), pre-merge index simulation (dry-run over the same merge code path
+  as the real merge),
   and `{repo}/{branch}` branch-state push to the instance repo.
-- Org-configurable gating per check type (init/doc-drift blocking, interface-conflict and
-  diagram-missing advisory, by default), read from the instance repo's `panopticon.config.json`
+- Org-configurable gating per check type (init/doc-drift blocking,
+  interface-conflict and
+  diagram-missing advisory, by default), read from the instance repo's
+  `panopticon.config.json`
   rather than hardcoded.
-- Combined report: a de-duplicated TL;DR leading (and trailing) the GitHub Actions summary and PR
-  comment, collapsing every doc-drift/index-currency/diagram-existence finding into a single "run
-  panopticon-doc-generation once" action regardless of how many docs, the index, or the diagram
+- Combined report: a de-duplicated TL;DR leading (and trailing) the GitHub
+  Actions summary and PR
+  comment, collapsing every doc-drift/index-currency/diagram-existence finding
+  into a single "run
+  panopticon-doc-generation once" action regardless of how many docs, the index,
+  or the diagram
   section are affected.
-- CI checks distinguish an operational failure (crash, malformed LLM response, unreachable
-  endpoint) from a genuine business verdict by a fixed exit-code contract, so a check that could
-  not run is never silently misreported as passing or as a stale-docs finding — and every
-  independent check still runs and reports its own outcome regardless of an earlier failure.
+- CI checks distinguish an operational failure (crash, malformed LLM response,
+  unreachable
+  endpoint) from a genuine business verdict by a fixed exit-code contract, so a
+  check that could
+  not run is never silently misreported as passing or as a stale-docs finding —
+  and every
+  independent check still runs and reports its own outcome regardless of an
+  earlier failure.
 
 **Master sync** (`master-sync`)
-- Merge-to-main sync workflow: docs copied to `docs/{repo}/`, index shard replaced wholesale,
-  compiled index rebuilt, pushed directly to the instance repo's default branch (no PR).
-- Deterministic org-wide architecture diagram rebuilt in the same commit as the compiled index,
+
+- Merge-to-main sync workflow: docs copied to `docs/{repo}/`, index shard
+  replaced wholesale,
+  compiled index rebuilt, pushed directly to the instance repo's default branch
+  (no PR).
+- Deterministic org-wide architecture diagram rebuilt in the same commit as the
+  compiled index,
   with no dependency on any child repo having a diagram section yet.
-- Fetch-rebase-retry loop for concurrent pushes from multiple child repos, touching only the
+- Fetch-rebase-retry loop for concurrent pushes from multiple child repos,
+  touching only the
   compiled-index rebuild on retry — shards are never cross-modified.
-- Conflict-issue creation in both the instance and child repo on a merge conflict, cross-linked,
-  updating the existing issue rather than opening duplicates across repeated merges.
-- Instance branch lifecycle: the matching `{repo}/{branch}` branch is deleted when a PR closes.
+- Conflict-issue creation in both the instance and child repo on a merge
+  conflict, cross-linked,
+  updating the existing issue rather than opening duplicates across repeated
+  merges.
+- Instance branch lifecycle: the matching `{repo}/{branch}` branch is deleted
+  when a PR closes.
 
-### Fixed
+### Fixed (section 534)
 
-- Module-shadowing bug where the child repo's vendored `panopticon/` subset silently shadowed the
-  instance repo's full package during CI checks (`python -m`/`-c` prepend cwd to `sys.path` ahead
+- Module-shadowing bug where the child repo's vendored `panopticon/` subset
+  silently shadowed the
+  instance repo's full package during CI checks (`python -m`/`-c` prepend cwd to
+  `sys.path` ahead
   of `PYTHONPATH`), fixed via `PYTHONSAFEPATH=1` at job level.
-- Exit-code collision where an uncaught check exception and a genuine "stale" verdict produced the
-  same exit code, causing crashes to be silently misreported as business verdicts.
+- Exit-code collision where an uncaught check exception and a genuine "stale"
+  verdict produced the
+  same exit code, causing crashes to be silently misreported as business
+  verdicts.
 
-[0.1.3]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.3
-[0.1.2]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.2
-[0.1.1]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.1
-[0.1.0]: https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.0
+[0.1.3]:
+https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.3
+[0.1.2]:
+https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.2
+[0.1.1]:
+https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.1
+[0.1.0]:
+https://github.com/industrial-curiosity/panopticon-ay-eye/releases/tag/v0.1.0

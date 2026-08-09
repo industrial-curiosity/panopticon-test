@@ -1,186 +1,177 @@
 # panopticon-ay-eye
 
-## Overview
-
-This is Panopticon — the knowledge base tracking full system architecture, inter-service interfaces, and internal
-(same-org) library/package dependencies across our repositories, used to understand how an organization's projects
-related to one another and catch breaking changes and incompatibilities before they land.
-
-[org architecture](docs/architecture.md)
-
-> **Maintainer note:** this Overview paragraph is generic boilerplate seeded from the Panopticon template.
-> Replace it with a description specific to your organization once you've customized this instance repo.
-
+<!-- Centered media uses HTML because Markdown cannot align it; a plain image
+would lose the README's intentional visual balance. -->
+<!-- markdownlint-disable MD033 -->
 <p align="center">
   <img src="https://industrialcuriosity.com/images/panopticon/panopticon-logo-chip.png" alt="Panopticon logo" />
 </p>
+<!-- markdownlint-enable MD033 -->
 
-**Getting started:** see the [org-owner setup guide](docs/setup-guide.md).
+## [View the organization architecture](docs/architecture.md)
 
-To initialize a child repository against either a public or private instance, run the public template
-launcher from that child repository:
+Panopticon gives an organization a shared view of its system architecture:
+repository documentation,
+runtime interfaces, and internal package dependencies. It helps teams see
+cross-repository changes before
+they land.
+
+## Start here
+
+Create a private instance from this template, run its LiteLLM, OpenAI, or Bedrock
+configuration workflow, and
+initialize child repositories. The [org-owner setup guide](docs/setup-guide.md)
+walks through that process,
+including the four rollout gates (workflow access, effective configuration,
+caller identity/credentials, and real request compatibility), provider choices,
+template sync, the reviewed Bedrock credential-action example, customization
+protection, and local recovery from failed syncs. Bedrock model identity may be
+provided by its organization variable or by the non-secret instance default
+`llm.defaults.model`; the public template does not select a universal model.
+Runtime-only provider behavior changes do not force child re-bootstrap. A
+change to only an effective value also does not require bootstrap. The
+caller renderer owns the compatibility fingerprint and hashes only the
+semantic reusable-workflow target, caller permissions, configured mappings,
+credential mode, and caller-passed values. Instance-resolved operational
+defaults and Bedrock model values are runtime-only, even when shown in
+cosmetic generated comments; changes to them do not require child
+re-bootstrap. Changes to the actual rendered caller ABI require regeneration
+of affected callers; an incompatible caller receives a clear bootstrap
+recovery path. The reusable workflow owns the pre-job
+timeout fallback, so changing that shared default does not require child
+re-bootstrap. For a pinned workflow ref, bootstrap and
+local sync load that ref's renderer, so the generated fingerprint and reusable
+workflow use the same version.
+Instance administrators can change the value of the mapped organization
+job-timeout variable for existing children without regenerating callers.
+Renaming the mapped variable changes the caller compatibility revision and
+requires caller regeneration; legacy instance job-timeout defaults are
+ignored during migration.
+During the migration window, provider workflows retain and ignore the old
+optional `configuration_defaults` input so pre-change callers can dispatch and
+reach the legacy compatibility gate. Newly generated callers omit it. The
+trusted provider contract also exposes a separate full-contract `revision`
+for diagnostics and migration checks. The existing reusable-workflow wire input
+`configuration_revision` is intentionally retained for caller ABI compatibility,
+but carries the semantic `caller_revision`; existing compatible callers may use
+`legacy_revision`. Renaming that wire input would require a coordinated caller
+migration. A mismatch reports `caller compatibility revision changed` and gives
+the child-bootstrap recovery path.
+For required values, optional request budgets, defaults, and the exact
+organization integration path, use the [provider-configuration guide](docs/provider-configuration.md).
+
+To initialize a child repository, run the public launcher from that repository:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-eye/main/install.py | python3
 ```
 
-The launcher asks for missing interactive inputs and then runs the installer owned by the selected
-instance. Set `PANOPTICON_INSTANCE=YOUR-ORG/YOUR-INSTANCE-REPO` for repeatable runs; for example,
-`PANOPTICON_INSTANCE=acme/panopticon-instance`. Private instances use `GH_TOKEN`, `GITHUB_TOKEN`, or an
-existing `gh auth` session. CI runs must provide the instance and required authentication through their
-secret environment.
+Set `PANOPTICON_INSTANCE=YOUR-ORG/YOUR-INSTANCE-REPO` for a non-interactive run;
+for example,
+`PANOPTICON_INSTANCE=acme/panopticon-instance`. Authenticate every install,
+including for a public instance, with `GH_TOKEN`, `GITHUB_TOKEN`, or an existing
+`gh auth` session. Authentication provides a much higher GitHub API quota and is
+required for private instances. Set a token through your shell or CI secret
+environment; never place its value directly in the launcher command.
+
+After the agent runs finalization, review the child repository's
+`panopticon-initialization-report.md`. It gives the current outcome and separates
+child-repository repairs from organization configuration follow-up. Complete any
+listed action, then rerun the exact finalization command from the report.
 
 ## How it works
 
-There are three repository roles:
+Panopticon has three repository roles:
 
-- **Template repo** ([panopticon-ay-eye](https://github.com/industrial-curiosity/panopticon-ay-eye), public) — the Python tooling, deterministic interface and dependency parsers,
-  shared GitHub Actions workflows, and agent skills. Parsers developed inside organizations are contributed back
-  upstream here.
-- **Instance repo** (a private copy per organization, aka the "master repo") — the organization's knowledge base:
-  `docs/{repo}/` copies of every child repo's documentation, a per-repo interface index shard and a per-repo
-  dependency index shard for each child repo, the compiled org-wide interface index and compiled org-wide
-  dependency index, a deterministically rebuilt org-wide architecture diagram (`docs/architecture.md`, rendering
-  both interface and dependency relationships), and org configuration (check gating, workflow ref policy, diagram
-  format, declared internal package registries).
-- **Child repos** — the organization's repositories, initialized by a script run from the instance copy. Each child
-  repo owns its local docs, local interface index, and local dependency index, and is the authoritative source for
-  the interfaces it owns and the packages it publishes.
+- **Template** — this public repository provides the shared tooling, workflows,
+  and skills.
+- **Instance** — one private knowledge-base repository per organization, created
+  from the template.
+- **Child repository** — an organization repository connected to its instance.
 
-### Lifecycle
+The workflow is intentionally simple:
 
-1. **Initialization** — the user's AI agent, guided by the bundled skills, generates the repo's documentation
-   (architecture overview — including an agent-drawn `## Architecture diagram` section, per-component, interface,
-   and operational docs) and builds its local interface index; tooling run from the instance fork wires the child
-   repo to the shared workflows, validates that docs and index meet requirements, and writes
-   `panopticon/config.json` — the initialization flag, which also records repo-level settings such as the
-   documentation location.
-2. **Pull requests** — shared workflows check that the repo is initialized, that documentation was updated when code
-   or configuration changes require it (including diagram staleness), that the diagram section exists and is
-   well-formed (a separate deterministic check, no LLM call), and run a **pre-merge simulation** of the repo's
-   interface changes against the instance repo's compiled index, reporting conflicts as PR comments. The PR's docs
-   and index state are pushed to a matching branch named `{repo}/{branch}` in the instance repo, making in-flight
-   branch state visible org-wide. Initialization and doc-drift checks fail loudly by default so the developer
-   knows what to fix; interface-conflict and diagram-missing checks are advisory by default. Organizations can
-   adjust each check type. A separate **tooling-currency check** — always advisory, never gated, no
-   `CHECK_TYPES` entry — warns when the repo's wired workflow ref, downloaded skills, or vendored local
-   tooling have drifted from the instance repo's current default branch; remediation is `python3 -m
-   panopticon.sync` (see below), left to the maintainer's discretion.
-3. **Merge to main** — the child repo pushes directly to the instance repo: docs are copied to `docs/{repo}/`, the
-   repo's index shard is replaced wholesale, the compiled org-wide index is rebuilt, and the org-wide architecture
-   diagram (`docs/architecture.md`, one section per repo with cross-repo interfaces) is deterministically rebuilt
-   from that fresh compiled index — no LLM involvement, so it can never disagree with the index. If the merge
-   produces conflict entries, issues are opened in both the instance repo and the child repo (at most one open
-   conflict issue per repo, updated in place). Conflicts live only in the instance repo — a child repo only knows
-   what it knows.
-4. **Planning** — when planning a change, a developer's agent reads the instance repo's compiled index (via the
-   GitHub CLI or MCP with their personal token) to see which interface connections a change would affect.
+1. Initialize a child repository to generate its architecture documentation and
+   local indexes. During documentation generation, the child compares proposed
+   interface names with the instance's existing compiled index and persists
+   reviewed naming decisions as source/configuration hints.
+2. On pull requests, Panopticon checks behavior-bearing changes against
+   documentation, compares likely interface matches with the instance index,
+   and predicts interface conflicts; documentation-only changes pass without
+   an LLM review.
+3. On merge, the instance collects documentation and indexes to build an
+   organization-wide view.
+4. When planning a change, developers and agents use that shared view to
+   understand affected connections.
 
-**Dependency-indexing's CI wiring status:** local extraction (`python3 -m panopticon.dependency_extraction`),
-merge/simulation (`python3 -m panopticon.dependency_merge`), and org-diagram rendering all fully support
-dependencies today — the diagram writer reads both the compiled interface and compiled dependency indices and
-renders both, regardless of which merge path last ran. The shared reusable workflows (steps 2–3 above) don't yet
-call `dependency_extraction`/`dependency_merge` automatically — that's tracked as follow-up work, not silently
-dropped. Until then, a repo's dependency index is populated by running the local tooling directly and pushing the
-resulting shard.
+Panopticon deliberately excludes illustrative directories (`examples`, `samples`, `fixtures`,
+`testdata`, `demos`, `scaffolding`, `demo`, and `scaffold`) from analysis while retaining similarly
+named production paths such as `src/sample-service`. A child repository's generated
+`operations.md` lists the excluded folders actually present and documents the explicit
+`panopticon-ignore file` and `panopticon-ignore declaration` escape hatches.
 
-### The interface index
+The organization architecture is a complete interface inventory: it includes
+interfaces even when only one repository participates, and highlights detected
+ownership/type conflicts and potential same-name collisions.
 
-The index maps meaningful **interface names** (REST endpoints, Kafka topics, gRPC services, S3 buckets, …) to arrays
-of interface objects: owner, type, and consumer/producer lists of repos with the source files each repo uses to
-create or configure the interface. Names are canonicalized by normalization rules plus LLM judgment at
-extraction/merge time, persisted as `panopticon-` hint comments in source files so judgments are stable. The
-index describes the **state declared by code, not deployments** — branches are a
-first-class dimension; environments (prod/staging) are not. Interfaces are extracted by deterministic parsers where
-one exists for the interface type, with LLM-driven extraction as the fallback; extraction without a parser logs a
-recommendation to create one.
+Interface-conflict checks are advisory by default. The instance sets the default
+in `panopticon.config.json`, and a child repository may override that check in
+its committed `panopticon/config.json` with
+`gating.interface-conflict: "advisory"` or `"blocking"`. Both modes publish a
+prominent warning; only `blocking` fails the PR check.
 
-The owning repo always re-asserts truth on its next merge; manual edits to the instance repo's index are temporary
-stopgaps.
+Child repositories can also run the manual **Panopticon resource sync** workflow
+to refresh their managed skills and local tooling. It opens or updates a
+reviewable open pull request instead of changing the default branch directly.
+After that pull request is merged or closed, the next changed sync creates a
+new pull request.
 
-### The dependency index
+Run `python3 -m panopticon.sync` in an initialized child repository to refresh
+managed skills, local tooling, and Panopticon workflow callers. Use
+`python3 -m panopticon.sync --check-updates` to preview the resulting changes.
+Each run downloads the versioned, data-only child-safe tooling manifest from
+the selected instance branch, so a child repository's vendored manifest cannot
+expand the set of files sync manages. It warns, without deleting them, about
+Python modules outside the manifest so maintainers can review legacy or
+child-owned files.
 
-A separate index — own schema, own files (`dependencies/` in the instance repo, `panopticon/dependencies.json`
-locally) — tracks **internal (same-org) library/package dependencies**: one repo importing another org repo's
-published package. This is a different relationship than a runtime interface (compile-time/library coupling, not
-a protocol a repo calls at runtime), so it's never recorded as an interface `type`. Each dependency object has
-exactly one self-registered producer (the repo that publishes the package) and any number of consumers, each
-recording which specific modules/packages it imports (import-level granularity) — not just that a dependency
-exists.
+Child-local documentation links stay relative to the document that contains
+them. Generated links from a child README or architecture overview to the
+organization architecture use the resolver-produced direct GitHub URL, so they
+work from both the child and instance repositories.
 
-Internality is detected in layers, most portable first: an ecosystem whose dependency declaration already embeds
-the org's GitHub identity (Go module paths under `github.com/{org}/...`) resolves with zero configuration; an
-org-declared registry host (`internal_registries` in the org config) covers registry-based ecosystems (JVM,
-Python, npm, …) with one config field reused for both a consumer detecting a dependency and a producer
-self-registering one; a live cross-reference against the instance repo's already-self-registered producers
-catches the rest; and a `panopticon-dependency` hint or LLM fallback (with parser-gap reporting, same as
-interfaces) handles anything the deterministic layers can't resolve — see `docs/hint-reference.md`. A dependency
-that's really just a packaged/generated client for an interface this org already tracks can be linked to it with
-a `panopticon-dependency-of` hint (never inferred automatically), which the org diagram uses to render one
-combined edge instead of two.
+## Documentation
 
-Go ships as the first deterministic parser (`panopticon/parsers/go_mod.py`) — the zero-configuration proof of
-concept. Other ecosystems fall back to LLM extraction until a parser is contributed for them.
+- [Set up an organization instance](docs/setup-guide.md)
+- [Configure provider defaults](docs/provider-configuration.md)
+- [Contribution guidelines](CONTRIBUTING.md)
+- [Contribute a parser](docs/parser-contribution.md)
+- [Use interface and dependency hints](docs/hint-reference.md)
+- [Run the test suite](docs/testing.md)
+- [View the organization architecture](docs/architecture.md)
 
-### Architecture principles
+## Repository contents
 
-- **Hybrid execution** — deterministic Python for everything structural (checks, index merge/compile, parsers);
-  LLM agents only where judgment is required (doc generation, drift detection, extraction fallback).
-- **Provider-agnostic agents** — CI agent steps are configured via `PANOPTICON_LLM_API_KEY` and
-  `PANOPTICON_LLM_ENDPOINT` secrets; litellm-compatible endpoints are supported first. Local flows
-  (initialization, doc updates) run the same skills in the user's preferred AI agent harness and need no LLM
-  secrets. Every CI check that requires a structured JSON response (doc-drift, index-currency, interface
-  extraction) goes through one shared, hardened runtime method (`LLMClient.complete_json`) that retries with a
-  corrective message — never relaxed validation — when a model doesn't comply with a skill's JSON-only response
-  contract on the first attempt, before failing loudly. No provider-specific request parameters (e.g.
-  `response_format`) are used, so this works across "a wide variety of LLMs" without narrowing which
-  litellm-compatible endpoints are supported.
-- **Minimal Python requirements** — stdlib-first, checkout-and-run on a bare CI runner, every dependency justified
-  and pinned.
-- **Cross-repo auth** — an org-level `PANOPTICON_INSTANCE_TOKEN` secret grants read/write access to the private
-  instance repo (PR simulation, `{repo}/{branch}` branch pushes, and the merge push). All Panopticon secrets are
-  org-level: child repos inherit them and never need per-repo secret or env configuration.
+- `panopticon/` — Python tooling used by the template, instance, and CI
+  workflows.
+- `.github/workflows/` — shared automation for configuration, evaluation, merge,
+  and template sync.
+- `interfaces/` and `dependencies/` — organization-wide indexes populated in an
+  instance.
+- `docs/` — setup, contribution, and reference documentation.
+- `.agents/skills/` — skills used by local agents and CI.
 
-## Repository layout
+For configuration details, supported providers, sync protection rules, and
+operational procedures, use the
+[org-owner setup guide](docs/setup-guide.md) rather than relying on this
+overview.
 
-- `panopticon/` — the stdlib-only Python tooling: interface index schema (`index.py`), dependency index schema
-  (`dependencies.py`), interface shard merge / compiled rebuild / simulation (`merge.py`), the dependency
-  equivalent (`dependency_merge.py`), name normalization and hints including both interface and dependency hint
-  forms (`naming.py`), deterministic interface parsers (`parsers/`, e.g. `kafka_topics.py`/`rest_openapi.py`) and
-  the first deterministic dependency parser (`parsers/go_mod.py`), the interface extraction driver
-  (`extraction.py`) and its dependency equivalent (`dependency_extraction.py`), registry-host detection and the
-  instance cross-reference for dependencies (`dependency_lookup.py`), CI LLM runtime (`llm.py`, `skills.py`), doc
-  rendering and diagram-section validation (`docs.py`), doc-drift, index-currency, diagram-existence, and
-  tooling-currency checks (`drift.py`, `currency.py`, `diagram_check.py`, `tooling_currency.py` — the last always
-  advisory, never gated), deterministic org-wide diagram rendering combining both indices (`diagrams.py`),
-  org/repo/diagram config, `internal_registries`, and the protected-config registries (`config.py`), child-repo
-  init (`init_repo.py`), the on-demand local sync script (`sync.py`), and the org-diagram link script
-  (`org_diagram_link.py`)
-- `.github/workflows/` — the reusable workflows child repos call: `panopticon-pr.yml`, `panopticon-merge.yml`,
-  `panopticon-pr-close.yml`; plus `sync-from-template.yml`, run from instance repos to pull template updates.
-  Before merging, template sync registers `docs/architecture.md` as a template-declared, instance-owned
-  generated path in `.git/info/attributes`: an existing instance diagram wins over the template placeholder,
-  while an instance with no diagram receives that placeholder. This fixed rule is separate from protected
-  JSON config and org-declared `protected_paths` customizations.
-  These don't yet invoke `dependency_extraction`/`dependency_merge` (see "Dependency-indexing's CI wiring status"
-  above) — local/manual use of that tooling is fully supported today.
-- `interfaces/` — interface index shards + compiled index (empty in the template; populated in instance repos)
-- `dependencies/` — dependency index shards + compiled index (empty in the template; populated in instance repos)
-- `panopticon.config.json` — org configuration: per-check gating (including `diagram-missing`) and workflow ref
-  policy, `protected_paths` — an org-declared list of instance-level customizations (skills, vendored
-  tooling modules) excluded from `sync-from-template`'s merge via `.git/info/attributes` (never committed;
-  printed to the sync run's step summary instead) — and `internal_registries`, an org-declared list of the org's
-  own private package registry hosts, used by dependency-indexing
-- `panopticon.diagram.config.json` *(instance repos only)* — diagram rendering format (default `mermaid`);
-  protected from `sync-from-template`'s merge via `.gitattributes`
-- `PANOPTICON.md` — a concise, static getting-started guide, downloaded verbatim into every child repo's
-  root by the bootstrap script (identical across child repos of a given instance; not per-repo templated)
-- `tests/` — `unittest` suite ([how to run](docs/testing.md))
-- `docs/` — [org-owner setup guide](docs/setup-guide.md), [parser contribution guide](docs/parser-contribution.md),
-  [hint annotation reference](docs/hint-reference.md), [testing](docs/testing.md), and project strategy documents
-- `openspec/` — spec-driven change management ([OpenSpec](https://github.com/Fission-AI/OpenSpec))
-- `.agents/skills/` — agent skills: project ground rules (`panopticon-architecture`, `panopticon-index-schema`,
-  `panopticon-python-tooling`), the bundled Panopticon skills shared by local agents and CI
-  (`panopticon-init` orchestrates `panopticon-interface-naming`, `panopticon-interface-extraction`,
-  `panopticon-dependency-naming`, `panopticon-dependency-extraction`, and `panopticon-doc-generation`;
-  plus `panopticon-doc-drift`, `panopticon-index-currency`), and OpenSpec workflow skills
+<!-- Centered media uses HTML because Markdown cannot align it; a plain linked
+thumbnail would lose the README's intentional visual balance. -->
+<!-- markdownlint-disable MD033 -->
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=sIJ9XhBSkI8" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.youtube.com/vi/sIJ9XhBSkI8/hqdefault.jpg" alt="Watch the Panopticon introduction on YouTube" />
+  </a>
+</p>
+<!-- markdownlint-enable MD033 -->

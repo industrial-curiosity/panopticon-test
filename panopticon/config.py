@@ -5,7 +5,12 @@
     {
       "schema_version": 1,
       "gating": {"init": "blocking", "doc-drift": "blocking", "interface-conflict": "advisory"},
-      "workflow_ref": "v1"
+      "workflow_ref": "v1",
+      "llm": {
+        "provider": "litellm",
+        "secrets": {"instance_token": "PANOPTICON_INSTANCE_TOKEN"},
+        "variables": {"model": "PANOPTICON_LLM_MODEL"}
+      }
     }
 
 Gating modes are per check type; the defaults above implement the settled gating policy
@@ -15,16 +20,21 @@ Workflows must read these modes rather than hardcoding outcomes. ``workflow_ref`
 When omitted, callers resolve the effective ref themselves (e.g. the instance repo's default
 branch, fetched live) — this module has no network access and so has no way to know that ref
 locally; it reports ``None`` rather than guessing a value like a tag that may not exist.
+The template omits ``llm`` deliberately. General config consumers receive ``None``; provider-dependent
+paths call ``provider_contract`` and fail loudly until the matching provider-specific Configure
+Panopticon workflow persists a valid contract.
 
 **Repo config** — ``panopticon/config.json`` in a child repo: doubles as the initialization flag
-and records repo-level settings:
+and records repo-level settings. The optional ``gating.interface-conflict`` value is a child-owned
+override of the instance default:
 
     {
       "schema_version": 1,
       "repo": "svc-a",
       "instance": "acme/panopticon-instance",
       "workflow_ref": "v1",
-      "docs_location": "docs"
+      "docs_location": "docs",
+      "gating": {"interface-conflict": "blocking"}
     }
 
 **Diagram config** — ``panopticon.diagram.config.json`` at the instance repo root (design D6): a
@@ -63,6 +73,7 @@ import json
 from pathlib import Path
 
 from . import SCHEMA_VERSION
+from .providers import INSTANCE_CREDENTIAL_ACTION, resolve_provider_contract
 
 ORG_CONFIG_BASENAME = "panopticon.config.json"
 REPO_CONFIG_PATH = Path("panopticon") / "config.json"
@@ -94,10 +105,35 @@ SUPPORTED_DIAGRAM_FORMATS = (DEFAULT_DIAGRAM_FORMAT,)
 PROTECTED_CONFIG_FILES = {
     DIAGRAM_CONFIG_BASENAME: {"format": DEFAULT_DIAGRAM_FORMAT},
 }
+GENERATED_PROTECTED_PATHS = ("docs/architecture.md",)
 
 
 class ConfigError(Exception):
     pass
+
+
+def derive_protected_path_groups(org_config):
+    """Return generated, trusted provider-derived, and org-declared sync paths."""
+    config = org_config if isinstance(org_config, dict) else {}
+    llm = config.get("llm")
+    provider_paths = ()
+    if (
+        isinstance(llm, dict)
+        and llm.get("provider") == "bedrock"
+        and llm.get("credential_mode") == "instance-managed"
+    ):
+        provider_paths = (INSTANCE_CREDENTIAL_ACTION,)
+    return {
+        "generated": GENERATED_PROTECTED_PATHS,
+        "provider": provider_paths,
+        "organization": tuple(config.get("protected_paths", [])),
+    }
+
+
+def derive_protected_paths(org_config):
+    """Return deduplicated runtime merge-protected paths in report order."""
+    groups = derive_protected_path_groups(org_config)
+    return tuple(dict.fromkeys(path for paths in groups.values() for path in paths))
 
 
 def _load_json(path, description):
@@ -139,7 +175,15 @@ def load_org_config(instance_root="."):
         "workflow_ref": doc.get("workflow_ref"),
         "protected_paths": protected_paths,
         "internal_registries": internal_registries,
+        # Provider selection is deliberately not defaulted. General configuration consumers can
+        # load a new template instance; provider-dependent paths call provider_contract() below.
+        "llm": doc.get("llm"),
     }
+
+
+def provider_contract(org_config):
+    """Resolve and validate the effective provider contract for provider-dependent work."""
+    return resolve_provider_contract(org_config.get("llm"))
 
 
 def gating_mode(org_config, check):
@@ -157,6 +201,18 @@ def load_repo_config(repo_root="."):
     missing = [field for field in ("repo", "instance", "docs_location") if not doc.get(field)]
     if missing:
         raise ConfigError(f"repo config at {path} is missing required fields: {missing}")
+    gating = doc.get("gating", {})
+    if not isinstance(gating, dict):
+        raise ConfigError(f"repo config at {path}: 'gating' must be an object")
+    unknown = set(gating) - {"interface-conflict"}
+    if unknown:
+        raise ConfigError(f"repo config at {path}: unknown gating checks {sorted(unknown)}")
+    mode = gating.get("interface-conflict")
+    if mode is not None and mode not in GATING_MODES:
+        raise ConfigError(
+            f"repo config at {path}: gating for 'interface-conflict' must be one of "
+            f"{list(GATING_MODES)}, got {mode!r}"
+        )
     return doc
 
 
@@ -166,6 +222,23 @@ def save_repo_config(config, repo_root="."):
     payload = {"schema_version": SCHEMA_VERSION, **config}
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
+
+
+def effective_gating_mode(instance_root=".", child_root=".", check="interface-conflict"):
+    """Return ``(mode, source)`` using the child override before instance config.
+
+    Child configuration is intentionally read from the child repository rather than an instance
+    repository per-repo map: the child owns its explicit override, while the instance owns the
+    default for children that do not set one.
+    """
+    if check not in CHECK_TYPES:
+        raise ConfigError(f"unknown check type '{check}'")
+    instance_mode = gating_mode(load_org_config(instance_root), check)
+    child = load_repo_config(child_root)
+    child_mode = (child or {}).get("gating", {}).get(check)
+    if child_mode is not None:
+        return child_mode, "child repository config"
+    return instance_mode, "instance config" if Path(instance_root, ORG_CONFIG_BASENAME).is_file() else "built-in default"
 
 
 def load_diagram_config(instance_root="."):

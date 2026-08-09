@@ -11,6 +11,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from panopticon.config import derive_protected_path_groups, derive_protected_paths
+
+
+ROOT = Path(__file__).resolve().parent.parent
+INSTANCE_CALLER_WORKFLOW = ROOT / ".github" / "workflows" / "sync-from-template.yml"
+SHARED_SYNC_WORKFLOW = (
+    ROOT / ".github" / "workflows" / "shared-template-sync-caller-only.yml"
+)
+
 
 def _git(args, cwd, check=True):
     result = subprocess.run(
@@ -34,6 +43,100 @@ def _commit_all(path, message):
 
 
 GENERATED_PATHS = ("docs/architecture.md",)
+
+
+class TestTemplateSyncWorkflowContracts(unittest.TestCase):
+    def test_instance_workflow_is_a_fixed_minimal_shared_workflow_caller(self):
+        text = INSTANCE_CALLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", text)
+        self.assertIn(
+            "uses: industrial-curiosity/panopticon-ay-eye/.github/workflows/"
+            "shared-template-sync-caller-only.yml@main",
+            text,
+        )
+        self.assertIn("instance_token: ${{ secrets.PANOPTICON_INSTANCE_TOKEN }}", text)
+        self.assertNotIn("runs-on:", text)
+        self.assertNotIn("git merge", text)
+        self.assertNotIn("workflow_dispatch:\n    inputs:", text)
+
+    def test_shared_workflow_uses_default_token_fallback(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("workflow_call:", text)
+        self.assertIn(
+            "token: ${{ secrets.instance_token || github.token }}", text
+        )
+        self.assertIn("Record template-sync authentication", text)
+        self.assertIn("PANOPTICON_SYNC_START_SHA", text)
+
+    def test_workflow_changes_are_blocked_without_instance_token_before_push(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Validate token before pushing workflow changes", text)
+        self.assertIn(
+            'git diff --quiet "$PANOPTICON_SYNC_START_SHA" HEAD -- .github/workflows', text
+        )
+        self.assertIn("PANOPTICON_INSTANCE_TOKEN GitHub-token secret", text)
+        self.assertLess(
+            text.index("Validate token before pushing workflow changes"), text.index("- name: Push")
+        )
+
+    def test_shared_workflow_prints_fixed_local_recovery_instructions_on_failure(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("- name: Prepare local recovery instructions", text)
+        self.assertIn("- name: Write local recovery instructions", text)
+        self.assertIn("if: failure()", text)
+        self.assertIn(
+            "https://github.com/industrial-curiosity/panopticon-ay-eye.git", text
+        )
+        self.assertIn("git fetch template main", text)
+        self.assertIn("git config merge.ours.driver true", text)
+        self.assertIn("git merge template/main", text)
+        self.assertIn("git add -A", text)
+        self.assertIn("git push origin HEAD", text)
+
+    def test_shared_workflow_uses_real_newlines_for_attributes_and_summaries(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(r'merge=ours\n', text)
+        self.assertNotIn(r'merge=ours\\n', text)
+        self.assertNotIn(r'paths\\n', text)
+        self.assertIn("## Panopticon: template merge failed", text)
+        self.assertIn("printf '%s\\n' \"${merge_output}\"", text)
+
+    def test_shared_workflow_reports_failures_at_the_detecting_stage(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        for title in (
+            "## Panopticon: template fetch failed",
+            "## Panopticon: protected-path registration failed",
+            "## Panopticon: template merge failed",
+            "## Panopticon: template sync push failed",
+        ):
+            with self.subTest(title=title):
+                self.assertIn(title, text)
+        self.assertIn("Write local recovery instructions", text)
+
+    def test_shared_workflow_uses_trusted_provider_derived_paths_and_separate_summary(self):
+        text = SHARED_SYNC_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("derive_protected_path_groups", text)
+        self.assertIn("derive_protected_paths", text)
+        self.assertIn("## Provider-derived protected paths", text)
+        self.assertIn("## Org-declared protected paths", text)
+
+    def test_only_exact_bedrock_instance_managed_contract_derives_action_path(self):
+        cases = (
+            ({}, False),
+            ("not-an-object", False),
+            ({"llm": {"provider": "bedrock"}}, False),
+            ({"llm": {"provider": "bedrock", "credential_mode": "github-oidc"}}, False),
+            ({"llm": {"provider": "openai", "credential_mode": "instance-managed"}}, False),
+            ({"llm": {"provider": "bedrock", "credential_mode": "instance-managed"}}, True),
+        )
+        for config, expected in cases:
+            with self.subTest(config=config):
+                groups = derive_protected_path_groups(config)
+                self.assertEqual(bool(groups["provider"]), expected)
+                self.assertEqual(
+                    ".github/actions/panopticon-aws-credentials/action.yml" in derive_protected_paths(config),
+                    expected,
+                )
 
 
 def _register_runtime_attributes(instance_root, protected_paths=()):
@@ -85,6 +188,34 @@ class TestRoutineSyncProtection(unittest.TestCase):
                 (instance / ".gitattributes").read_text(),
                 "panopticon.diagram.config.json merge=ours\n",
             )
+
+    def test_trusted_instance_managed_action_survives_routine_sync(self):
+        action_path = ".github/actions/panopticon-aws-credentials/action.yml"
+        config = {"llm": {"provider": "bedrock", "credential_mode": "instance-managed"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            template = Path(tmp) / "template"
+            instance = Path(tmp) / "instance"
+            _init_repo(template)
+            (template / action_path).parent.mkdir(parents=True)
+            (template / action_path).write_text("template v1")
+            _commit_all(template, "template initial")
+
+            _git(["clone", "-q", str(template), str(instance)], tmp)
+            _git(["config", "user.email", "a@b.c"], instance)
+            _git(["config", "user.name", "a"], instance)
+            (instance / action_path).write_text("instance-owned")
+            _commit_all(instance, "instance credential action")
+
+            (template / action_path).write_text("template v2")
+            _commit_all(template, "template action update")
+            _git(["remote", "add", "template", str(template)], instance)
+            _git(["fetch", "-q", "template", "main"], instance)
+            _register_runtime_attributes(instance, derive_protected_paths(config))
+
+            merge = _git(["merge", "template/main", "--no-edit"], instance, check=False)
+
+            self.assertEqual(merge.returncode, 0, merge.stdout + merge.stderr)
+            self.assertEqual((instance / action_path).read_text(), "instance-owned")
 
 
 class TestFirstSyncProtection(unittest.TestCase):
@@ -142,6 +273,34 @@ class TestFirstSyncProtection(unittest.TestCase):
 
             self.assertEqual(merge.returncode, 0, merge.stdout + merge.stderr)
             self.assertEqual((instance / "skill.md").read_text(), "org customized before first sync")
+
+    def test_trusted_instance_managed_action_survives_first_sync(self):
+        action_path = ".github/actions/panopticon-aws-credentials/action.yml"
+        config = {"llm": {"provider": "bedrock", "credential_mode": "instance-managed"}}
+        with tempfile.TemporaryDirectory() as tmp:
+            template = Path(tmp) / "template"
+            instance = Path(tmp) / "instance"
+            _init_repo(template)
+            (template / action_path).parent.mkdir(parents=True)
+            (template / action_path).write_text("template action")
+            _commit_all(template, "template initial")
+
+            _init_repo(instance)
+            (instance / action_path).parent.mkdir(parents=True)
+            (instance / action_path).write_text("instance action")
+            _commit_all(instance, "instance initial")
+            _git(["remote", "add", "template", str(template)], instance)
+            _git(["fetch", "-q", "template", "main"], instance)
+            _register_runtime_attributes(instance, derive_protected_paths(config))
+
+            merge = _git(
+                ["merge", "template/main", "--no-edit", "--allow-unrelated-histories", "-X", "theirs"],
+                instance,
+                check=False,
+            )
+
+            self.assertEqual(merge.returncode, 0, merge.stdout + merge.stderr)
+            self.assertEqual((instance / action_path).read_text(), "instance action")
 
 
 class TestGeneratedOrgDiagramSync(unittest.TestCase):

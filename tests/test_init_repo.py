@@ -10,6 +10,9 @@ from pathlib import Path
 from panopticon.config import load_repo_config
 from panopticon.index import save_index
 from panopticon.init_repo import (
+    INITIALIZATION_REPORT,
+    configured_actions_names,
+    configured_optional_value_status,
     detect_docs_location,
     discover_workflow_ref,
     initialize,
@@ -17,6 +20,8 @@ from panopticon.init_repo import (
     _fallback_workflow_ref,
     _resolve_instance_default_branch,
 )
+from panopticon.callers import caller_workflow_text
+from panopticon.providers import resolve_provider_contract
 
 from .helpers import load_fixture
 from .test_docs import make_docs_tree
@@ -31,7 +36,12 @@ def write_caller_workflow(root, ref, instance="acme/panopticon-instance"):
         "jobs:\n"
         "  panopticon:\n"
         f"    uses: {instance}/.github/workflows/panopticon-pr.yml@{ref}\n"
-        "    secrets: inherit\n"
+        "    with:\n"
+        "      endpoint: ${{ vars.ACME_LLM_ENDPOINT }}\n"
+        "      model: ${{ vars.ACME_LLM_MODEL }}\n"
+        "    secrets:\n"
+        "      api_key: ${{ secrets.ACME_LLM_KEY }}\n"
+        "      instance_token: ${{ secrets.ACME_INSTANCE_TOKEN }}\n"
     )
 
 
@@ -100,20 +110,32 @@ class TestValidationGate(unittest.TestCase):
             code, messages = run_init(tmp, docs_location="docs")
             self.assertEqual(code, 1)
             self.assertIsNone(load_repo_config(tmp))
+            report = (Path(tmp) / INITIALIZATION_REPORT).read_text()
         text = "\n".join(messages)
         self.assertIn("NOT written", text)
         self.assertIn("architecture overview", text)
         self.assertIn("local index", text)
+        self.assertIn("**Blocked.**", report)
+        self.assertIn("## Child repository", report)
+        self.assertIn("**Where:** `docs`", report)
+        self.assertIn("**Next step:**", report)
 
     def test_successful_finalization_writes_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             make_valid_child(tmp)
-            code, messages = run_init(tmp)
+            code, messages = run_init(
+                tmp,
+                env={"GH_TOKEN": "token"},
+                urlopen=_make_repo_metadata_urlopen("main"),
+            )
             self.assertEqual(code, 0, messages)
             config = load_repo_config(tmp)
+            report = (Path(tmp) / INITIALIZATION_REPORT).read_text()
         self.assertEqual(config["repo"], "svc-a")
         self.assertEqual(config["docs_location"], "docs")
         self.assertIn("wrote panopticon/config.json", "\n".join(messages))
+        self.assertIn("Initialization completed with no actionable issues.", report)
+        self.assertIn("## Template/tooling\n\nNo actionable issues.", report)
 
     def test_config_is_last_artifact_written(self):
         """panopticon/config.json must not exist before validation passes."""
@@ -157,6 +179,16 @@ class TestIdempotentRefinalization(unittest.TestCase):
             config = load_repo_config(tmp)
         self.assertEqual(config["workflow_ref"], "v2")
         self.assertIn("idempotent re-init", "\n".join(messages))
+
+    def test_refinalization_replaces_initialization_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_valid_child(tmp)
+            report_path = Path(tmp) / INITIALIZATION_REPORT
+            report_path.write_text("stale report\n")
+            self.assertEqual(run_init(tmp)[0], 0)
+            report = report_path.read_text()
+        self.assertNotIn("stale report", report)
+        self.assertIn("# Panopticon initialization report", report)
 
 
 class TestDiscoverWorkflowRef(unittest.TestCase):
@@ -229,6 +261,11 @@ class TestWorkflowRefDefaultsToDiscovery(unittest.TestCase):
 
 
 class TestSecretVerification(unittest.TestCase):
+    def verify(self, runner):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_caller_workflow(tmp, "v1")
+            return verify_org_secrets("acme", tmp, runner=runner)
+
     def gh_stub(self, returncode=0, stdout="", stderr=""):
         class Result:
             pass
@@ -253,44 +290,40 @@ class TestSecretVerification(unittest.TestCase):
         return runner
 
     def test_missing_secret_reported_with_instructions(self):
-        report = verify_org_secrets(
-            "acme",
-            runner=self.gh_stub_url_aware(
-                secrets_stdout="PANOPTICON_LLM_API_KEY\n",
-                vars_stdout="PANOPTICON_LLM_ENDPOINT\nPANOPTICON_LLM_MODEL\n",
-            ),
+        report = self.verify(
+            self.gh_stub_url_aware(
+                secrets_stdout="ACME_LLM_KEY\n",
+                vars_stdout="ACME_LLM_ENDPOINT\nACME_LLM_MODEL\n",
+            )
         )
         text = "\n".join(report)
-        self.assertIn("PANOPTICON_INSTANCE_TOKEN", text)
+        self.assertIn("ACME_INSTANCE_TOKEN", text)
         self.assertIn("settings/secrets/actions", text)
 
     def test_missing_variable_reported_with_instructions(self):
-        report = verify_org_secrets(
-            "acme",
-            runner=self.gh_stub_url_aware(
-                secrets_stdout="PANOPTICON_LLM_API_KEY\nPANOPTICON_INSTANCE_TOKEN\n",
-                vars_stdout="PANOPTICON_LLM_MODEL\n",
-            ),
+        report = self.verify(
+            self.gh_stub_url_aware(
+                secrets_stdout="ACME_LLM_KEY\nACME_INSTANCE_TOKEN\n",
+                vars_stdout="ACME_LLM_MODEL\n",
+            )
         )
         text = "\n".join(report)
-        self.assertIn("PANOPTICON_LLM_ENDPOINT", text)
+        self.assertIn("ACME_LLM_ENDPOINT", text)
         self.assertIn("settings/secrets/actions", text)
 
     def test_all_present(self):
-        report = verify_org_secrets(
-            "acme",
-            runner=self.gh_stub_url_aware(
-                secrets_stdout="PANOPTICON_LLM_API_KEY\nPANOPTICON_INSTANCE_TOKEN\n",
-                vars_stdout="PANOPTICON_LLM_ENDPOINT\nPANOPTICON_LLM_MODEL\n",
-            ),
+        report = self.verify(
+            self.gh_stub_url_aware(
+                secrets_stdout="ACME_LLM_KEY\nACME_INSTANCE_TOKEN\n",
+                vars_stdout="ACME_LLM_ENDPOINT\nACME_LLM_MODEL\n",
+            )
         )
         self.assertIn("all org-level secrets present", report[0])
 
     def test_gh_failure_is_report_only(self):
-        report = verify_org_secrets("acme", runner=self.gh_stub(returncode=1, stderr="HTTP 403"))
+        report = self.verify(self.gh_stub(returncode=1, stderr="HTTP 403"))
         text = "\n".join(report)
-        for name in ("PANOPTICON_LLM_API_KEY", "PANOPTICON_INSTANCE_TOKEN",
-                     "PANOPTICON_LLM_ENDPOINT", "PANOPTICON_LLM_MODEL"):
+        for name in ("ACME_LLM_KEY", "ACME_INSTANCE_TOKEN", "ACME_LLM_ENDPOINT", "ACME_LLM_MODEL"):
             self.assertIn(name, text)
         self.assertIn("gh secret list --org acme", text)
         self.assertIn("gh variable list --org acme", text)
@@ -298,10 +331,48 @@ class TestSecretVerification(unittest.TestCase):
 
     def test_gh_not_installed_reports_manual_steps(self):
         with unittest.mock.patch("shutil.which", return_value=None):
-            report = verify_org_secrets("acme", runner=self.gh_stub())
+            report = self.verify(self.gh_stub())
         text = "\n".join(report)
         self.assertIn("gh secret list --org acme", text)
         self.assertIn("settings/secrets/actions", text)
+
+    def test_names_are_derived_from_generated_caller(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_caller_workflow(tmp, "v1")
+            secrets, variables = configured_actions_names(tmp)
+        self.assertEqual(secrets, ("ACME_LLM_KEY", "ACME_INSTANCE_TOKEN"))
+        self.assertEqual(variables, ("ACME_LLM_ENDPOINT", "ACME_LLM_MODEL"))
+
+    def test_generated_caller_excludes_optional_variables_from_missing_checks(self):
+        contract = resolve_provider_contract({"provider": "litellm"})
+        with tempfile.TemporaryDirectory() as tmp:
+            workflow = Path(tmp) / ".github" / "workflows"
+            workflow.mkdir(parents=True)
+            (workflow / "panopticon-pr.yml").write_text(
+                caller_workflow_text("panopticon-pr.yml", "acme/instance", "main", contract)
+            )
+            secrets, variables = configured_actions_names(tmp)
+            status = configured_optional_value_status(tmp)
+        self.assertIn("PANOPTICON_LLM_API_KEY", secrets)
+        self.assertEqual(variables, ("PANOPTICON_LLM_MODEL", "PANOPTICON_LLM_ENDPOINT"))
+        self.assertIn("optional PANOPTICON_LLM_TIMEOUT_SECONDS", "\n".join(status))
+
+    def test_bedrock_model_is_optional_and_reports_both_allowed_sources(self):
+        contract = resolve_provider_contract({"provider": "bedrock"})
+        with tempfile.TemporaryDirectory() as tmp:
+            workflow = Path(tmp) / ".github" / "workflows"
+            workflow.mkdir(parents=True)
+            (workflow / "panopticon-pr.yml").write_text(
+                caller_workflow_text("panopticon-pr.yml", "acme/instance", "main", contract)
+            )
+            secrets, variables = configured_actions_names(tmp)
+            status = configured_optional_value_status(tmp)
+        self.assertIn("PANOPTICON_INSTANCE_TOKEN", secrets)
+        self.assertNotIn("PANOPTICON_LLM_MODEL", variables)
+        self.assertIn(
+            "optional PANOPTICON_LLM_MODEL (model): organization variable or instance config",
+            status,
+        )
 
     def test_missing_secrets_never_block_finalization(self):
         from unittest import mock
@@ -315,6 +386,28 @@ class TestSecretVerification(unittest.TestCase):
                 code, messages = run_init(tmp, skip_secret_check=False)
         self.assertEqual(code, 0, messages)
         self.assertIn("missing org-level secret", "\n".join(messages))
+
+    def test_unavailable_org_verification_is_a_non_blocking_report_item(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as tmp:
+            make_valid_child(tmp)
+            with mock.patch(
+                "panopticon.init_repo.verify_org_secrets",
+                return_value=["could not query org secrets via gh api (not authenticated)."],
+            ):
+                code, _ = run_init(
+                    tmp,
+                    skip_secret_check=False,
+                    env={"GH_TOKEN": "token"},
+                    urlopen=_make_repo_metadata_urlopen("main"),
+                )
+            report = (Path(tmp) / INITIALIZATION_REPORT).read_text()
+        self.assertEqual(code, 0)
+        self.assertIn("**Complete with follow-up.**", report)
+        self.assertIn("## Organization configuration", report)
+        self.assertIn("could not query org secrets", report)
+        self.assertIn("does not block local initialization", report)
 
 
 class TestResolveInstanceDefaultBranch(unittest.TestCase):

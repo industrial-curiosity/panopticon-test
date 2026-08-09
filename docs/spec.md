@@ -1,0 +1,205 @@
+# Panopticon technical workflow architecture
+
+## Purpose
+
+This document summarizes the stable technical boundaries between Panopticon's
+template, instance, and child
+repositories. Operational setup belongs in the [org-owner setup
+guide](setup-guide.md).
+
+Child-repository finalization writes `panopticon-initialization-report.md` on
+every attempt before it creates the `panopticon/config.json` initialization flag.
+The report separates child-repository, organization-configuration, and
+template/tooling findings and gives the next action for each; credential values
+are never recorded.
+
+Initialization is one continuous sequence: before finalization writes the
+configuration file, documentation generation derives its repository, instance,
+and workflow-reference context from the bootstrap caller workflow. GitHub API
+clients retry transient failures and recognized rate limits using the full
+GitHub-provided `Retry-After` or reset timing when available; they do not retry
+while GitHub still directs them to wait. Users should authenticate every install,
+including public-instance installs, to avoid the lower anonymous API quota;
+tokens are also required for private instances.
+
+## Repository roles
+
+- The public template owns deterministic Python tooling, trusted workflow and
+  action implementations, and
+  agent skills. Its root-level [`CONTRIBUTING.md`](../CONTRIBUTING.md) documents
+  the OpenSpec-based
+  contributor workflow for changes to those assets.
+- Each organization creates a private instance that owns organization
+  configuration, generated
+  documentation, index shards, and compiled indexes.
+- Child repositories own their local documentation and indexes and invoke the
+  instance's reusable
+  evaluation and synchronization workflows.
+
+## Provider configuration
+
+An instance starts without an implicit LLM provider. Its maintainer runs exactly
+one fixed-provider manual
+workflow:
+
+- `.github/workflows/configure-panopticon-litellm.yml`
+- `.github/workflows/configure-panopticon-openai.yml`
+- `.github/workflows/configure-panopticon-bedrock.yml`
+
+Each workflow exposes only GitHub Actions secret and variable *names*, never
+credential values. Both check
+out the instance and invoke `.github/actions/configure-panopticon/action.yml`,
+which uses the trusted provider
+registry and deterministic `panopticon.configure_instance` module to validate
+and persist
+`panopticon.config.json`. The callers share a branch-scoped concurrency group so
+only one configuration
+mutation runs at a time.
+
+The OpenAI workflow fixes its base URL to `https://api.openai.com/v1`; it does
+not expose, persist, or forward an endpoint variable. LiteLLM remains the
+provider for a configurable OpenAI-compatible endpoint.
+
+Provider contracts distinguish required values from optional request-budget
+values. Required credentials, repository access, LiteLLM endpoint, and
+applicable Bedrock identity settings come from organization Actions
+configuration. LiteLLM and OpenAI model identity is required; Bedrock model
+identity is optional for prerequisite reporting and resolves from the
+organization variable or the non-secret `llm.defaults.model` instance default,
+with the organization variable taking precedence. The public template does not
+select a universal Bedrock model. Runtime budgets resolve in order from an organization
+variable, the fixed instance default Action, a non-secret instance-configured
+default, then the template workflow default. Job timeout is resolved in the
+generated caller from an organization variable or reusable-workflow default
+because GitHub determines it before an Action can run; instance-level timeout
+defaults are not embedded in callers. The
+workflow summary and initialization report expose only each value's source
+label, never its value.
+
+Provider configuration selects trusted reusable PR workflow paths and canonical
+input mappings; it cannot
+inject an arbitrary repository, workflow, action, or command. Splitting the
+manual entrypoints does not
+change the persisted provider schema or trusted workflow paths. Generated
+callers embed a caller-compatibility revision owned by the caller renderer. It
+hashes the semantic reusable-workflow target, caller permissions, configured
+names, credential mode, and caller-passed values. Instance-resolved operational
+defaults and the Bedrock model are runtime-only when callers pass organization
+variable expressions; cosmetic generated comments do not make them caller
+inputs. The reusable workflow owns
+the pre-job timeout fallback, so changing that default is runtime-only and does
+not invalidate existing callers. Runtime-only provider behavior changes do not
+invalidate an existing caller; changes to that rendered compatibility
+surface do. Changes to only effective values do not require bootstrap, and a
+reusable-workflow fallback is preferred when it can preserve the caller ABI.
+During the migration window, provider workflows retain an optional
+`configuration_defaults` input with default `{}` and ignore it so pre-change
+callers dispatch and reach the legacy compatibility gate; newly generated
+callers omit the input. A genuinely incompatible caller receives a clear
+instruction to rerun bootstrap.
+Instance administrators control the job timeout through the mapped organization
+Actions variable; legacy instance job-timeout defaults are migration-only and
+are not a live source or a caller input.
+Bootstrap and local sync load the caller renderer from the effective
+`workflow_ref`, so a pinned caller is rendered and fingerprinted by the same
+instance revision that validates it; default-branch tooling refreshes remain
+independent of that caller contract.
+Bootstrap may use its bundled renderer only when the instance caller file is
+missing (404) or retrieval exhausts connection retries; authentication and
+other API failures stop bootstrap before managed child writes.
+The trusted provider contract's full-contract `revision` remains available for
+diagnostics and migration checks; it is not the caller-staleness key. Provider
+workflows validate the semantic `caller_revision` value through the existing
+`configuration_revision` wire input, whose name is retained to preserve every
+generated caller's ABI. They accept `legacy_revision` during the compatibility
+migration. A stale value reports `caller compatibility revision changed` and
+directs the child maintainer to bootstrap again.
+
+Operational onboarding follows four gates in order: the instance must allow the
+child to call its reusable workflow, effective provider values must resolve,
+the child caller's identity and credentials must be usable, and one real
+provider request must be accepted. Reusable workflow code does not transfer
+caller identity; GitHub OIDC evaluates the child repository subject, so
+organization-managed credentials may require per-child provisioning. The
+instance setup guide records the authoritative evidence, owner, recovery, and
+proof for each gate.
+
+## Evaluation and synchronization
+
+Child PR callers invoke the selected LiteLLM, OpenAI, or Bedrock evaluation workflow with
+explicit organization-level
+secret and variable mappings. Provider-neutral checks share prompting,
+validation, correction, reporting,
+and gating behavior; authentication and transport remain inside the provider
+entrypoint.
+
+The Bedrock instance-managed credential action is bounded at the caller step
+boundary. A later caller-owned recovery step runs with an `always()`-style
+condition so failure or timeout guidance survives cancellation inside the
+composite action. Provider preflight confirms credentials and capability only;
+request compatibility is proven by a real structured inference.
+
+Bootstrap also wires a stable, manual child resource-sync caller to a
+template-owned reusable workflow. It refreshes only managed Panopticon skills
+vendored tooling and managed workflow callers, uses the instance token only for
+that read, and opens or updates an open child-repository pull request for review
+when resources changed. Once a resource-sync pull request is merged or closed,
+the next changed sync creates a new pull request. Local sync derives caller
+workflows from the effective `workflow_ref` so older children can acquire newly
+managed callers without re-running bootstrap. It also downloads the
+instance-owned versioned, data-only child-safe local-tooling manifest on every
+run, then refreshes only the listed modules. CI-only runtime modules and
+child-owned files outside that manifest are not managed by local sync. It
+reports those unmanaged Python modules as instance-excluded or
+child-only advisory candidates for reviewed removal, without changing them.
+
+The documentation-drift check first classifies the PR diff. Documentation,
+agent guidance and templates, OpenSpec artifacts, changelogs, and test-only
+changes are clean without an LLM request. For behavior-bearing changes, every
+stale-doc finding must name the changed behavior file that supports it and a
+specific required documentation update. Invalid, contradictory, or unsupported
+findings are operational failures, not stale-doc verdicts.
+
+Analysis consistently excludes exact illustrative directory components (`examples`, `samples`,
+`fixtures`, `testdata`, `demos`, `scaffolding`, `demo`, and `scaffold`, case-insensitively) and
+explicit `panopticon-ignore file` / `panopticon-ignore declaration` annotations. Extraction
+summaries report excluded paths or declaration locations without disclosing unrelated content. Each
+child's generated `operations.md` visibly lists the illustrative directories currently present and
+excluded, and its architecture diagram links to that section.
+
+On child merge, deterministic synchronization copies generated documentation,
+replaces that repository's
+index shard, and rebuilds compiled indexes in the instance. Pull requests
+simulate the same merge behavior
+and publish in-flight branch state without changing the instance's default
+branch. The PR workflow also compares bounded likely matches from the child
+index with the instance compiled index, and publishes those advisory findings
+with the validated child Mermaid architecture diagram in its maintained report
+comment. Interface-conflict gating defaults to the instance configuration but
+may be overridden by the child repository's committed
+`panopticon/config.json`; both advisory and blocking modes warn prominently,
+while only blocking fails the check. Instance template syncs preserve declared
+instance-owned paths and automatically derive the fixed
+`.github/actions/panopticon-aws-credentials/action.yml` path when the raw
+instance contract selects Bedrock `instance-managed`. The derived path is
+written to runtime `merge.ours` attributes and reported separately from
+organization-declared paths. Recovery text links to the reviewed credential
+example and gives the same derivation for local repair. Syncs report the failing
+stage and recovery action when they cannot complete.
+
+## Architecture diagram links
+
+Child-local documentation links use paths relative to the document that
+contains them, so they work both in the child repository and in its
+`docs/{repo}/` instance mirror. Every generated child-to-org architecture link,
+including links in the README and architecture overview, uses the resolved
+absolute GitHub URL with the child repository anchor. The instance org diagram
+continues to use `{repo}/architecture.md` relative links to its mirrored child
+documentation.
+
+The organization architecture inventories every participating repository
+interface, including interfaces used by one repository alone. Dependencies stay
+limited to external relationships. When the compiled index detects an
+ownership/type dispute or a potential same-name collision, `## Detected
+interface conflicts` summarizes it and highlights the affected Mermaid
+resources and table rows.

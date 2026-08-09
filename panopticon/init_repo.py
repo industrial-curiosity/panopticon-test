@@ -25,6 +25,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -33,15 +34,21 @@ from .config import load_repo_config, save_repo_config
 from .docs import validate_docs
 from .index import KIND_LOCAL, IndexValidationError, load_index
 
-ORG_SECRETS = ("PANOPTICON_LLM_API_KEY", "PANOPTICON_INSTANCE_TOKEN")
-ORG_VARS = ("PANOPTICON_LLM_ENDPOINT", "PANOPTICON_LLM_MODEL")
-
 _EXISTING_DOC_DIRS = ("docs", "doc", "documentation")
 
 CALLER_WORKFLOW_FOR_REF = Path(".github") / "workflows" / "panopticon-pr.yml"
 _USES_REF_RE = re.compile(r"^\s*uses:\s*\S+/\.github/workflows/\S+@(\S+)\s*$", re.MULTILINE)
+_ACTIONS_NAME_RE = re.compile(r"\$\{\{\s*(secrets|vars)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+_CONFIGURATION_NAMES_RE = re.compile(r"^\s*configuration_names:\s+'([^']+)'\s*$", re.MULTILINE)
+_OPTIONAL_PROVIDER_VARIABLES_RE = re.compile(
+    r"^# Optional provider variables: (.+)$", re.MULTILINE
+)
+_INSTANCE_PROVIDER_DEFAULTS_RE = re.compile(
+    r"^# Instance provider defaults: (.+)$", re.MULTILINE
+)
 
 FALLBACK_WORKFLOW_REF = "main"
+INITIALIZATION_REPORT = "panopticon-initialization-report.md"
 
 
 def discover_workflow_ref(child_root):
@@ -99,6 +106,89 @@ def validate_child(child_root, repo_name, docs_location):
     return problems
 
 
+def _report_item(where, issue, next_step):
+    return (
+        f"- **Where:** `{where}`\n"
+        f"  **Issue:** {issue}\n"
+        f"  **Next step:** {next_step}"
+    )
+
+
+def format_initialization_report(code, child_root, instance, docs_location, child_problems,
+                                 org_messages, branch_warning=None):
+    """Render the durable, secret-safe outcome of one finalization attempt."""
+    if code:
+        result = (
+            "**Blocked.** `panopticon/config.json` was not written. Complete the "
+            "listed actions, then rerun finalization."
+        )
+    elif child_problems or org_messages or branch_warning:
+        result = (
+            "**Complete with follow-up.** `panopticon/config.json` was written; "
+            "review the non-blocking items below."
+        )
+    else:
+        result = "**Complete.** Initialization completed with no actionable issues."
+
+    rerun = f"`python3 -m panopticon.init_repo --instance {instance}`"
+    child_items = [
+        _report_item(
+            "panopticon/index.json" if problem.startswith("local index:") else docs_location,
+            problem,
+            f"Run the relevant `/panopticon-doc-generation` or "
+            f"`/panopticon-interface-naming` step, then rerun {rerun}.",
+        )
+        for problem in child_problems
+    ]
+    org_items = [
+        _report_item(
+            f"GitHub organization settings for {instance.split('/')[0]}",
+            message.replace("\n", " "),
+            "Follow the verification or configuration instruction above; this does not block "
+            "local initialization.",
+        )
+        for message in org_messages
+    ]
+    if branch_warning:
+        org_items.append(_report_item(
+            "instance repository metadata",
+            branch_warning,
+            f"Make GitHub authentication available and rerun {rerun}.",
+        ))
+
+    def section(title, items):
+        body = "\n\n".join(items) if items else "No actionable issues."
+        return f"## {title}\n\n{body}"
+
+    return "\n\n".join((
+        "# Panopticon initialization report",
+        f"## Result\n\n{result}",
+        section("Child repository", child_items),
+        section("Organization configuration", org_items),
+        section("Template/tooling", []),
+        "Rerun finalization after completing any listed action. This report contains "
+        "configuration names and paths only; it never includes credential values.",
+    )) + "\n"
+
+
+def write_initialization_report(child_root, content):
+    """Atomically replace the child repository's initialization report."""
+    path = Path(child_root) / INITIALIZATION_REPORT
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
+        ) as report:
+            report.write(content)
+            temp_path = report.name
+        os.replace(temp_path, path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+    return path
+
+
 def _gh_api_names(runner, url, jq_expr):
     """Run a gh api call and return a set of names, or None on failure."""
     try:
@@ -115,7 +205,69 @@ def _gh_api_names(runner, url, jq_expr):
     return set(result.stdout.split())
 
 
-def _manual_verification_message(org, reason):
+def configured_actions_names(child_root):
+    """Derive the exact configured org names from the generated stable child caller."""
+    path = Path(child_root) / CALLER_WORKFLOW_FOR_REF
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return (), ()
+    optional_names = set()
+    names_match = _CONFIGURATION_NAMES_RE.search(text)
+    optional_match = _OPTIONAL_PROVIDER_VARIABLES_RE.search(text)
+    if names_match and optional_match:
+        try:
+            configured = json.loads(names_match.group(1))
+            optional_logicals = json.loads(optional_match.group(1))
+            optional_names = {
+                configured[logical] for logical in optional_logicals if logical in configured
+            }
+        except (TypeError, ValueError):
+            optional_names = set()
+    names = {"secrets": [], "vars": []}
+    for kind, name in _ACTIONS_NAME_RE.findall(text):
+        if kind == "vars" and name in optional_names:
+            continue
+        if name not in names[kind]:
+            names[kind].append(name)
+    return tuple(names["secrets"]), tuple(names["vars"])
+
+
+def configured_optional_value_status(child_root):
+    """Read source-safe optional-value status embedded by the generated caller."""
+    try:
+        text = (Path(child_root) / CALLER_WORKFLOW_FOR_REF).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ()
+    names_match = _CONFIGURATION_NAMES_RE.search(text)
+    optional_match = _OPTIONAL_PROVIDER_VARIABLES_RE.search(text)
+    defaults_match = _INSTANCE_PROVIDER_DEFAULTS_RE.search(text)
+    if not (names_match and optional_match and defaults_match):
+        return ()
+    try:
+        configured = json.loads(names_match.group(1))
+        optional_logicals = json.loads(optional_match.group(1))
+        defaults = json.loads(defaults_match.group(1))
+    except (TypeError, ValueError):
+        return ()
+    status = []
+    for logical in optional_logicals:
+        configured_name = configured.get(logical)
+        if not configured_name:
+            continue
+        if logical == "model":
+            source = "organization variable or instance config"
+        elif logical == "job_timeout_minutes":
+            source = "workflow default in reusable workflow"
+        elif logical in defaults:
+            source = "instance config (organization variable takes precedence)"
+        else:
+            source = "workflow default (or fixed instance action during CI)"
+        status.append(f"optional {configured_name} ({logical}): {source}")
+    return tuple(status)
+
+
+def _manual_verification_message(org, reason, secrets, variables):
     """Concrete web-UI + gh-CLI steps for verifying org secrets/variables by hand.
 
     Used whenever automated verification isn't possible (``gh`` missing, unauthenticated, or
@@ -125,8 +277,8 @@ def _manual_verification_message(org, reason):
     settings_url = f"https://github.com/organizations/{org}/settings/secrets/actions"
     return (
         f"{reason} Verify manually that these are configured:\n"
-        f"    secrets:   {', '.join(ORG_SECRETS)}\n"
-        f"    variables: {', '.join(ORG_VARS)}\n"
+        f"    secrets:   {', '.join(secrets)}\n"
+        f"    variables: {', '.join(variables)}\n"
         f"  Web UI: {settings_url} (secrets and variables are separate tabs)\n"
         f"  Or locally via the gh CLI (run `gh auth login` first if not already authenticated):\n"
         f"    gh secret list --org {org}\n"
@@ -134,14 +286,14 @@ def _manual_verification_message(org, reason):
     )
 
 
-def _check_gh_api_kind(org, runner, endpoint, collection_key, items, kind):
+def _check_gh_api_kind(org, runner, endpoint, collection_key, items, kind, secrets, variables):
     """Check one kind (secrets or variables) via `gh api`; returns a list of report lines."""
     settings_url = f"https://github.com/organizations/{org}/settings/secrets/actions"
     existing = _gh_api_names(runner, f"orgs/{org}/actions/{endpoint}", f".{collection_key}[].name")
     if existing is None:
         return [_manual_verification_message(
             org, f"could not query org {kind}s via `gh api` (not authenticated, or lacking "
-            "org-admin permissions)."
+            "org-admin permissions).", secrets, variables
         )]
     return [
         f"missing org-level {kind} {name}: create it at {settings_url} and grant access to all "
@@ -207,19 +359,34 @@ def _resolve_instance_default_branch(instance, env=None, urlopen=urllib.request.
     return _fetch_default_branch(instance, token, urlopen)
 
 
-def verify_org_secrets(org, runner=subprocess.run):
+def verify_org_secrets(org, child_root=".", runner=subprocess.run):
     """Report-only org secret/variable verification via the gh CLI. Never blocks local init."""
+    secrets, variables = configured_actions_names(child_root)
+    optional_status = configured_optional_value_status(child_root)
+    if not secrets and not variables:
+        return [
+            "could not derive org-level Actions names because the generated "
+            ".github/workflows/panopticon-pr.yml caller is missing or invalid; rerun child "
+            "bootstrap before the first PR"
+        ]
     if shutil.which("gh") is None:
-        return [_manual_verification_message(org, "the 'gh' CLI is not installed.")]
+        return [_manual_verification_message(
+            org, "the 'gh' CLI is not installed.", secrets, variables
+        )]
 
-    report = _check_gh_api_kind(org, runner, "secrets", "secrets", ORG_SECRETS, "secret")
-    report += _check_gh_api_kind(org, runner, "variables", "variables", ORG_VARS, "variable")
+    report = _check_gh_api_kind(
+        org, runner, "secrets", "secrets", secrets, "secret", secrets, variables
+    )
+    report += _check_gh_api_kind(
+        org, runner, "variables", "variables", variables, "variable", secrets, variables
+    )
 
     if not report:
         report.append(
-            f"all org-level secrets present: {', '.join(ORG_SECRETS)}; "
-            f"all org-level variables present: {', '.join(ORG_VARS)}"
+            f"all org-level secrets present: {', '.join(secrets)}; "
+            f"all org-level variables present: {', '.join(variables)}"
         )
+    report.extend(optional_status)
     return report
 
 
@@ -257,10 +424,17 @@ def initialize(child_root, repo_name, instance, docs_location=None, workflow_ref
             "Generate/repair the docs and index with your agent (panopticon-doc-generation, "
             "panopticon-interface-naming skills), then re-run the finalization step."
         )
+        report_path = write_initialization_report(
+            child_root,
+            format_initialization_report(1, child_root, instance, docs_location, problems, []),
+        )
+        messages.append(f"wrote {report_path.name} (initialization blocked)")
         return 1, messages
 
+    org_messages = []
     if not skip_secret_check:
-        messages.extend(verify_org_secrets(instance.split("/")[0], runner=runner))
+        org_messages = verify_org_secrets(instance.split("/")[0], child_root, runner=runner)
+        messages.extend(org_messages)
 
     config = {
         "repo": repo_name,
@@ -269,18 +443,27 @@ def initialize(child_root, repo_name, instance, docs_location=None, workflow_ref
         "docs_location": docs_location,
     }
     instance_default_branch = _resolve_instance_default_branch(instance, env=env, urlopen=urlopen)
+    branch_warning = None
     if instance_default_branch:
         config["instance_default_branch"] = instance_default_branch
     else:
-        messages.append(
+        branch_warning = (
             "could not resolve instance_default_branch (no GH_TOKEN/GITHUB_TOKEN or gh auth token "
             "available, or the GitHub API call failed) — re-run the bootstrap script once a token "
             "is available to pick it up (it refreshes this field on every rerun), or "
             "panopticon.org_diagram_link will attempt a live lookup itself when needed"
         )
+        messages.append(branch_warning)
 
+    report_path = write_initialization_report(
+        child_root,
+        format_initialization_report(
+            0, child_root, instance, docs_location, [], org_messages, branch_warning,
+        ),
+    )
     save_repo_config(config, repo_root=child_root)
     messages.append(f"wrote panopticon/config.json (repo={repo_name}, docs_location={docs_location})")
+    messages.append(f"wrote {report_path.name} (initialization complete)")
     return 0, messages
 
 

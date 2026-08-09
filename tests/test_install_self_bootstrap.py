@@ -55,8 +55,8 @@ def _contents_response(source):
     )
 
 
-def _http_error(request, status=404, body=b"sensitive-response-body"):
-    return urllib.error.HTTPError(request.full_url, status, "failure", {}, io.BytesIO(body))
+def _http_error(request, status=404, body=b"sensitive-response-body", headers=None):
+    return urllib.error.HTTPError(request.full_url, status, "failure", headers or {}, io.BytesIO(body))
 
 
 def _run_isolated(env, stdin_text=None):
@@ -113,6 +113,8 @@ class TestLauncherInputs(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("PANOPTICON_INSTANCE", result.stderr)
+        self.assertIn("| PANOPTICON_INSTANCE='owner/panopticon-instance' python3", result.stderr)
+        self.assertNotIn("export PANOPTICON_INSTANCE", result.stderr)
         self.assertNotIn("secret-value", result.stdout + result.stderr)
 
     def test_instance_prompt_reads_the_terminal(self):
@@ -200,6 +202,70 @@ class TestAuthentication(unittest.TestCase):
 
 
 class TestInstanceRetrieval(unittest.TestCase):
+    def test_launcher_uses_retry_after_for_rate_limit(self):
+        attempts, waits = [], []
+
+        def urlopen(request, timeout=30):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise _http_error(
+                    request, status=429, body=b"rate limited", headers={"Retry-After": "300"},
+                )
+            return _json_response({"default_branch": "main"})
+
+        self.assertEqual(
+            INSTALLER._api_json(
+                "https://api.github.com/repos/acme/instance", urlopen=urlopen, sleep=waits.append,
+            ),
+            {"default_branch": "main"},
+        )
+        self.assertEqual(waits, [300])
+
+    def test_launcher_caps_reset_time_for_rate_limit(self):
+        self.assertEqual(
+            INSTALLER._rate_limit_delay(
+                403,
+                {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1000"},
+                "",
+                lambda: 100,
+                1,
+            ),
+            900,
+        )
+
+    def test_rate_limited_launcher_waits_and_retries_without_body_output(self):
+        attempts, waits, messages = [], [], []
+
+        def urlopen(request, timeout=30):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise _http_error(
+                    request, status=403, body=b"rate limit sensitive-token",
+                    headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "105"},
+                )
+            return _json_response({"default_branch": "main"})
+
+        self.assertEqual(
+            INSTALLER._api_json(
+                "https://api.github.com/repos/acme/instance", urlopen=urlopen,
+                sleep=waits.append, now=lambda: 100, print_fn=messages.append,
+            ),
+            {"default_branch": "main"},
+        )
+        self.assertEqual(waits, [5])
+        self.assertNotIn("sensitive-token", "\n".join(messages))
+
+    def test_forbidden_launcher_response_does_not_retry(self):
+        attempts = []
+
+        def urlopen(request, timeout=30):
+            attempts.append(1)
+            raise _http_error(request, status=403, body=b"denied")
+
+        with self.assertRaises(INSTALLER.GitHubRequestError):
+            INSTALLER._api_json("https://api.github.com/repos/acme/instance", urlopen=urlopen)
+        self.assertEqual(len(attempts), 1)
+
     def test_explicit_ref_skips_default_branch_lookup(self):
         urlopen = mock.Mock(side_effect=AssertionError("default branch lookup was not expected"))
         self.assertEqual(
@@ -266,10 +332,31 @@ class TestInstanceRetrieval(unittest.TestCase):
 
 class TestDefaultInstancePayload(unittest.TestCase):
     FAKE_INIT = "SCHEMA_VERSION = 1\n"
+    FAKE_RECOVERY = (
+        "def child_bootstrap_command(instance):\n    return instance\n"
+        "def configuration_recovery(instance, branch):\n    return 'recovery'\n"
+        "def credential_action_recovery(instance, child_repository, action_path=None):\n"
+        "    return 'credential recovery'\n"
+    )
+    FAKE_PROVIDERS = (
+        "class ProviderConfigError(Exception):\n    pass\n"
+        "PROVIDERS = {'test': {}}\n"
+        "def resolve_provider_contract(config):\n    return config\n"
+    )
+    FAKE_CALLERS = (
+        "CALLER_WORKFLOWS = ('panopticon-pr.yml',)\n"
+        "def caller_compatibility_revision(_contract):\n"
+        "    return 'x'\n"
+        "def caller_workflow_text(*_args, **_kwargs):\n"
+        "    return ''\n"
+    )
     FAKE_BOOTSTRAP = (
         "from . import SCHEMA_VERSION\n"
+        "from .callers import CALLER_WORKFLOWS\n"
+        "from .providers import PROVIDERS\n"
+        "from .recovery import configuration_recovery\n"
         "def main():\n"
-        "    print(f'DEFAULT_BOOTSTRAP_RAN schema={SCHEMA_VERSION}')\n"
+        "    print(f'DEFAULT_BOOTSTRAP_RAN schema={SCHEMA_VERSION} callers={len(CALLER_WORKFLOWS)} providers={sorted(PROVIDERS)} {configuration_recovery(None, None)}')\n"
         "    return 0\n"
     )
 
@@ -280,6 +367,12 @@ class TestDefaultInstancePayload(unittest.TestCase):
             requests.append(request.full_url)
             if "/contents/panopticon/__init__.py" in request.full_url:
                 return _contents_response(self.FAKE_INIT)
+            if "/contents/panopticon/recovery.py" in request.full_url:
+                return _contents_response(self.FAKE_RECOVERY)
+            if "/contents/panopticon/providers.py" in request.full_url:
+                return _contents_response(self.FAKE_PROVIDERS)
+            if "/contents/panopticon/callers.py" in request.full_url:
+                return _contents_response(self.FAKE_CALLERS)
             if "/contents/panopticon/bootstrap.py" in request.full_url:
                 return _contents_response(self.FAKE_BOOTSTRAP)
             raise AssertionError(f"unexpected URL: {request.full_url}")
@@ -299,8 +392,61 @@ class TestDefaultInstancePayload(unittest.TestCase):
                                 INSTALL_SOURCE, "acme/instance", "trunk"
                             )
         self.assertEqual(caught.exception.code, 0)
-        self.assertIn("DEFAULT_BOOTSTRAP_RAN schema=1", output.getvalue())
-        self.assertEqual(len(requests), 2)
+        self.assertIn("DEFAULT_BOOTSTRAP_RAN schema=1 callers=1 providers=['test'] recovery", output.getvalue())
+        self.assertEqual(len(requests), 5)
+        self.assertLess(
+            next(i for i, url in enumerate(requests) if "providers.py" in url),
+            next(i for i, url in enumerate(requests) if "bootstrap.py" in url),
+        )
+
+    def test_current_bootstrap_loads_without_a_python_tooling_manifest(self):
+        source_by_path = {
+            "panopticon/__init__.py": self.FAKE_INIT,
+            "panopticon/recovery.py": self.FAKE_RECOVERY,
+            "panopticon/providers.py": self.FAKE_PROVIDERS,
+            "panopticon/callers.py": self.FAKE_CALLERS,
+            "panopticon/bootstrap.py": (REPO_ROOT / "panopticon" / "bootstrap.py").read_text(),
+        }
+
+        def api_json(url, _token):
+            path = url.split("/contents/", maxsplit=1)[1].split("?", maxsplit=1)[0]
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(source_by_path[path].encode()).decode(),
+            }
+
+        with mock.patch.object(INSTALLER, "_api_json", side_effect=api_json):
+            with mock.patch.dict(sys.modules, {}, clear=False):
+                bootstrap_main = INSTALLER._load_default_payload_from_github("acme/instance", "trunk")
+        self.assertTrue(callable(bootstrap_main))
+
+    def test_invalid_provider_payload_stops_before_bootstrap_execution(self):
+        requests = []
+
+        def urlopen(request, timeout=30):
+            requests.append(request.full_url)
+            if "/contents/panopticon/__init__.py" in request.full_url:
+                return _contents_response(self.FAKE_INIT)
+            if "/contents/panopticon/recovery.py" in request.full_url:
+                return _contents_response(self.FAKE_RECOVERY)
+            if "/contents/panopticon/providers.py" in request.full_url:
+                return _json_response({"encoding": "base64", "content": "not base64"})
+            raise AssertionError(f"bootstrap should not be fetched: {request.full_url}")
+
+        env = {
+            "PATH": "/usr/bin:/bin",
+            "PANOPTICON_INSTANCE": "acme/instance",
+            "PANOPTICON_INSTANCE_REF": "trunk",
+        }
+        with mock.patch.dict(os.environ, env, clear=True):
+            with mock.patch("urllib.request.urlopen", urlopen):
+                with mock.patch.dict(sys.modules, {}, clear=False):
+                    with self.assertRaises(SystemExit) as caught:
+                        INSTALLER.execute_instance_installer(
+                            INSTALL_SOURCE, "acme/instance", "trunk"
+                        )
+        self.assertEqual(caught.exception.code, 1)
+        self.assertFalse(any("bootstrap.py" in url for url in requests))
 
     def test_invalid_or_missing_instance_fails_in_a_real_subprocess(self):
         result = _run_isolated(

@@ -1,6 +1,6 @@
 ---
 name: openspec-apply-change
-description: Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks.
+description: "Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks. Require exactly one active change: stop when none exist and ask the user to select when multiple exist."
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -11,23 +11,27 @@ metadata:
 
 Implement tasks from an OpenSpec change.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name. Before acting, require exactly one active change.
 
-**Steps**
+## Steps
 
-1. **Select the change**
+1. **Require exactly one active change**
 
-   If a name is provided, use it. Otherwise:
-   - Infer from conversation context if the user mentioned a change
-   - Auto-select if only one active change exists
-   - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
+   Run `openspec list --json` before reading artifacts or making edits.
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
+   - If no active changes exist, report that apply requires an active change and STOP.
+   - If multiple active changes exist, prompt the user to select one and STOP.
+   - If exactly one active change exists, select it. A supplied change name MUST match that active change; otherwise report the mismatch and STOP.
+
+   Always announce: "Using change: &lt;name&gt;" and how to override (e.g.,
+   `/opsx:apply &lt;other&gt;`).
 
 2. **Check status to understand the schema**
+
    ```bash
    openspec status --change "<name>" --json
    ```
+
    Parse the JSON to understand:
    - `schemaName`: The workflow being used (e.g., "spec-driven")
    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
@@ -90,9 +94,9 @@ Implement tasks from an OpenSpec change.
    - If all done: suggest archive
    - If paused: explain why and wait for guidance
 
-**Output During Implementation**
+## Output During Implementation
 
-```
+```text
 ## Implementing: <change-name> (schema: <schema-name>)
 
 Working on task 3/7: <task description>
@@ -104,9 +108,9 @@ Working on task 4/7: <task description>
 ✓ Task complete
 ```
 
-**Output On Completion**
+## Output On Completion
 
-```
+```text
 ## Implementation Complete
 
 **Change:** <change-name>
@@ -121,9 +125,9 @@ Working on task 4/7: <task description>
 All tasks complete! Ready to archive this change.
 ```
 
-**Output On Pause (Issue Encountered)**
+## Output On Pause (Issue Encountered)
 
-```
+```text
 ## Implementation Paused
 
 **Change:** <change-name>
@@ -141,7 +145,8 @@ All tasks complete! Ready to archive this change.
 What would you like to do?
 ```
 
-**Guardrails**
+## Guardrails
+
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
 - If task is ambiguous, pause and ask before implementing
@@ -151,7 +156,7 @@ What would you like to do?
 - Pause on errors, blockers, or unclear requirements - don't guess
 - Use contextFiles from CLI output, don't assume specific file names
 
-**Fluid Workflow Integration**
+## Fluid Workflow Integration
 
 This skill supports the "actions on a change" model:
 
