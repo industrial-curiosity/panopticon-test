@@ -8,8 +8,8 @@ statements). Not called from any other component in this repo currently.
 
 ## Interfaces
 
-- **`product-catalog-db`** (`database`) — consumed here; owned externally (managed RDS instance,
-  no org repo owner). See [interfaces.md](../interfaces.md#product-catalog-db).
+- **`product-catalog-db`** (`database`) — consumed here; no owner is established in the local
+  index. See [interfaces.md](../interfaces.md#product-catalog-db).
 
 ## Key modules
 

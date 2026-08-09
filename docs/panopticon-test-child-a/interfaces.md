@@ -29,7 +29,7 @@
 - **Provenance:** extracted by LLM (no deterministic parser yet)
 - **Consumed by this repo via:** `inventory/events/kafka_consumer.py`
 
-## `order-processing-queue` (rest)
+## `order-processing-status` (rest)
 
 - **Owner:** unknown or manually created infrastructure
 - **Provenance:** extracted by LLM (no deterministic parser yet)

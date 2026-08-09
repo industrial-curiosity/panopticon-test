@@ -1,5 +1,20 @@
 # panopticon-test-child-a — operations
 
+<!-- panopticon-analysis-scope:start -->
+## Panopticon analysis scope
+
+Panopticon excludes illustrative material from interface, dependency, and doc-drift analysis.
+
+### Excluded directories currently in this repository
+
+- None currently detected.
+
+Directories whose exact path component is one of `examples`, `samples`, `fixtures`, `testdata`, `demos`, `scaffolding`, `demo`, `scaffold` are excluded case-insensitively.
+Similar production paths, such as `src/sample-service`, remain in scope.
+
+Use `panopticon-ignore file` in one of a file's first five nonblank lines to exclude the whole file. Use `panopticon-ignore declaration` on a declaration line or the line immediately before it to exclude only that declaration.
+<!-- panopticon-analysis-scope:end -->
+
 ## Running locally
 
 Prerequisites: Python 3.11+.
@@ -43,7 +58,7 @@ module), so all variables used by a given entrypoint must be set before it start
 | Variable | Used by | Description |
 | --- | --- | --- |
 | `ORDERS_API_URL` | `inventory/clients/orders.py` | Base URL for the orders service REST API |
-| `WAREHOUSE_ERP_URL` | `inventory/clients/erp.py` | Base URL for the on-premise warehouse ERP |
+| `WAREHOUSE_ERP_URL` | `inventory/clients/erp.py` | Base URL for the warehouse endpoint |
 | `ORDER_PROCESSING_URL` | `inventory/clients/order_processing.py` | Base URL for the order-processing status endpoint |
 | `KAFKA_BOOTSTRAP_SERVERS` | `inventory/events/kafka_consumer.py` | Kafka bootstrap server addresses |
 | `FULFILLMENT_QUEUE_URL` | `inventory/queue/fulfillment_queue.py` | SQS queue URL for fulfillment tasks |

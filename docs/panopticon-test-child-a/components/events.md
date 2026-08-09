@@ -9,8 +9,8 @@ side effects. Not called from, and does not call, any other component in this re
 
 ## Interfaces
 
-- **`order-events`** (`kafka`) — consumed here; owned externally by the order service, not this
-  repo. See [interfaces.md](../interfaces.md#order-events).
+- **`order-events`** (`kafka`) — consumed here; no owner is established in the local index. See
+  [interfaces.md](../interfaces.md#order-events).
 
 ## Key modules
 

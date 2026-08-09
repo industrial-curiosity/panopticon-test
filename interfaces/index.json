@@ -169,20 +169,6 @@
         "consumer": [
           {
             "extracted_by": "llm",
-            "repo": "panopticon-test-child-a",
-            "source_files": [
-              "inventory/clients/order_processing.py"
-            ]
-          }
-        ],
-        "owner": null,
-        "producer": [],
-        "type": "rest"
-      },
-      {
-        "consumer": [
-          {
-            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
               "infra/sqs-queues.yaml",
@@ -206,6 +192,22 @@
           }
         ],
         "type": "sqs"
+      }
+    ],
+    "order-processing-status": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/order_processing.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
       }
     ],
     "orders-api": [

@@ -4,22 +4,18 @@
 
 Exposes the REST API for querying and managing product inventory: listing inventory, reading and
 updating a single SKU's stock level, and reserving/releasing stock for orders. Defines the
-`inventory-api` interface via both its OpenAPI contract and its FastAPI route handlers. Also
-defines a second, separate FastAPI app (`inventory/api/orders_routes.py`) implementing an
-inventory-owned Orders API — this repo's own in-progress replacement for the orders service's
-existing `orders-api`, still under `clients.orders` during migration (see
-[clients](clients.md)). Request handling logic (persistence, ERP calls, event side effects) is
-out of scope here — every handler in both apps returns placeholder data and neither calls any
-other component in this repo.
+`inventory-api` interface via both its OpenAPI contract and its FastAPI route handlers. It also
+defines a second FastAPI app in `inventory/api/orders_routes.py` for `orders-api`. Request
+handling logic (persistence, ERP calls, and event side effects) is out of scope here: every
+handler in both apps returns placeholder data and neither calls another component in this repo.
 
 ## Interfaces
 
 - **`inventory-api`** (`rest`) — owned/produced here. See
   [interfaces.md](../interfaces.md#inventory-api).
-- **`orders-api`** (`rest`) — owned/produced here via `orders_routes.py`, alongside the orders
-  service's own pre-existing `orders-api` declaration; this repo's own index self-claims
-  ownership of the identical canonical name and type, an unreconciled ownership dispute (see
-  [interfaces.md](../interfaces.md#orders-api)).
+- **`orders-api`** (`rest`) — produced here via `orders_routes.py`. The same local index entry is
+  consumed by the clients component; the source alone does not establish whether the two usages
+  refer to different deployed services. See [interfaces.md](../interfaces.md#orders-api).
 
 ## Key modules
 
