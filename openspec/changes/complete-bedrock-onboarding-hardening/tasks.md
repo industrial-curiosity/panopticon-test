@@ -43,3 +43,8 @@
 - [x] 6.1 Add resolver and provider-workflow regression tests proving `legacy_revision` preserves pre-change `job_timeout_minutes` defaults, drops only the newly introduced Bedrock `model` default, equals the pre-change full-contract hash, and lets a pre-change caller with `configuration_defaults` reach the migration gate.
 - [x] 6.2 Codify the invariant that instance-owned operational controls must resolve at an instance/reusable-workflow boundary and must not require child-repository maintainer action.
 - [x] 6.3 Add a provider-workflow regression assertion that `PANOPTICON.md` links to `docs/setup-guide.md` as the authoritative four-gate rollout guide.
+
+## 7. Default payload import ordering
+
+- [x] 7.1 Register and execute the fetched default payload modules in dependency order so `panopticon.providers` is available before `panopticon.recovery`.
+- [x] 7.2 Add a regression test that uses the real `panopticon/recovery.py` source and proves the default payload loads without `ModuleNotFoundError`.
