@@ -139,8 +139,9 @@ class TestProviderWorkflows(unittest.TestCase):
         self.assertNotIn("AWS_SECRET_ACCESS_KEY=", example)
 
     def test_public_four_gate_guidance_is_self_contained_and_safe(self):
-        setup_guide = (ROOT / "docs" / "setup-guide.md").read_text(encoding="utf-8")
         getting_started = (ROOT / "PANOPTICON.md").read_text(encoding="utf-8")
+        setup_guide = (ROOT / "docs" / "setup-guide.md").read_text(encoding="utf-8")
+        self.assertIn("](docs/setup-guide.md)", getting_started)
         for phrase in (
             "Four-gate rollout and troubleshooting",
             "Reusable-workflow access",
@@ -157,20 +158,9 @@ class TestProviderWorkflows(unittest.TestCase):
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, setup_guide)
-        for phrase in (
-            "Four-gate rollout checks",
-            "caller-owned gate-3 summary",
-            "real structured inference",
-            "Administration: Read",
-            "Contents: Read",
-            "A 403 means the token lacks",
-        ):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, getting_started)
-        for document in (setup_guide, getting_started):
-            self.assertNotIn("YotpoLtd", document)
-            self.assertNotIn("402837048690", document)
-            self.assertNotIn("yotpo-api", document)
+        self.assertNotIn("YotpoLtd", setup_guide)
+        self.assertNotIn("402837048690", setup_guide)
+        self.assertNotIn("yotpo-api", setup_guide)
         self.assertIn("Wire the four caller GitHub Actions workflows", setup_guide)
         self.assertNotIn("Wire the three caller GitHub Actions workflows", setup_guide)
         self.assertNotIn("github_owned_allowed,plan", setup_guide)

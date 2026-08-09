@@ -9,13 +9,6 @@ PUBLIC_CREDENTIAL_ACTION_EXAMPLE_URL = (
     "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
     "docs/examples/panopticon-aws-credentials/action.yml"
 )
-PROTECTED_PATHS_FRAGMENT = (
-    '"protected_paths": [\n'
-    f'    "{INSTANCE_CREDENTIAL_ACTION}"\n'
-    "  ]"
-)
-
-
 def child_bootstrap_command(instance):
     """Return the exact installer command for a child bound to ``instance``."""
     return f"curl -fsSL {PUBLIC_INSTALLER_URL} | PANOPTICON_INSTANCE='{instance}' python3"
@@ -102,6 +95,11 @@ def stale_caller_recovery(instance):
 
 def credential_action_recovery(instance, child_repository, action_path=INSTANCE_CREDENTIAL_ACTION):
     """Return gate-three recovery for an instance-managed credential failure."""
+    protected_paths_fragment = (
+        '"protected_paths": [\n'
+        f'    "{action_path}"\n'
+        "  ]"
+    )
     return "\n".join(
         [
             "## Panopticon gate 3 failed: caller identity and credentials",
@@ -116,12 +114,12 @@ def credential_action_recovery(instance, child_repository, action_path=INSTANCE_
             f"   Use the organization's equivalent of `your-org-identity-tool register --repository '{child_repository}'`.",
             "2. Copy the reviewed, credential-free example from:",
             f"   {PUBLIC_CREDENTIAL_ACTION_EXAMPLE_URL}",
-            f"   to the exact instance-owned path `{INSTANCE_CREDENTIAL_ACTION}` and replace only the organization broker step.",
+            f"   to the exact instance-owned path `{action_path}` and replace only the organization broker step.",
             "3. The action must write `PANOPTICON_AWS_REGION` to `GITHUB_ENV`; verify that the broker selected the intended region before committing.",
             "4. A valid Bedrock `instance-managed` contract automatically protects the fixed action during template sync. Use this copyable fragment for other instance-owned customizations, not as a second requirement for the fixed action:",
             "",
             "~~~json",
-            PROTECTED_PATHS_FRAGMENT,
+            protected_paths_fragment,
             "~~~",
             "5. Confirm the generated child caller grants the permission required by the provider (Bedrock GitHub OIDC requires `id-token: write`) and that the fixed instance action remains at the expected path.",
             "6. If the caller or provider contract is stale, run the child bootstrap command below, review and commit the generated caller, and push it.",

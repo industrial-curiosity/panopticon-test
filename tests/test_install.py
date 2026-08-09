@@ -1102,8 +1102,23 @@ class TestProviderBootstrapErrors(unittest.TestCase):
             {"provider": "bedrock", "credential_mode": "instance-managed"}
         )
         tree = [{"type": "blob", "path": ".github/workflows/panopticon-pr-bedrock.yml"}]
-        with self.assertRaisesRegex(RuntimeError, "instance-managed credential action"):
+        with self.assertRaisesRegex(RuntimeError, "instance-managed credential action") as caught:
             validate_provider_workflow(tree, contract, "acme/instance", "v2")
+        message = str(caught.exception)
+        self.assertIn(
+            "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
+            "docs/examples/panopticon-aws-credentials/action.yml",
+            message,
+        )
+        self.assertIn(
+            '"protected_paths": [\n'
+            '    ".github/actions/panopticon-aws-credentials/action.yml"\n'
+            "  ]",
+            message,
+        )
+        self.assertIn("automatically protects the fixed action", message)
+        self.assertIn("curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/", message)
+        self.assertNotIn("PANOPTICON_INSTANCE_TOKEN=", message)
 
     def test_missing_instance_managed_action_prints_custom_ref_recovery(self):
         def urlopen(request, timeout=30):

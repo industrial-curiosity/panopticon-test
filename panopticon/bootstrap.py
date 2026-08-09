@@ -41,7 +41,11 @@ from .callers import (
     caller_workflow_text as shared_caller_workflow_text,
 )
 from .providers import ProviderConfigError, resolve_provider_contract
-from .recovery import child_bootstrap_command, configuration_recovery
+from .recovery import (
+    child_bootstrap_command,
+    configuration_recovery,
+    credential_action_recovery,
+)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -303,10 +307,16 @@ def validate_provider_workflow(tree, contract, instance, ref):
         )
     credential_action = contract.get("credential_action")
     if credential_action and credential_action not in paths:
+        recovery = credential_action_recovery(
+            instance,
+            "this child repository",
+            action_path=credential_action,
+        )
         raise RuntimeError(
             f"configured provider {contract['provider']!r} requires the instance-managed "
             f"credential action {credential_action}, but it is absent from {instance}@{ref}; "
-            "add the action or select github-oidc, then rerun child bootstrap"
+            "add the action or select github-oidc, then rerun child bootstrap\n\n"
+            f"{recovery}"
         )
 
 # ── instance_default_branch refresh (tooling-currency capability) ──────────────

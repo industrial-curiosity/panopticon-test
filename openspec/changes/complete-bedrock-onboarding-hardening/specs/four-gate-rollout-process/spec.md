@@ -44,3 +44,16 @@ use placeholder or synthetic ARNs in public examples.
 - **WHEN** the profile can be discovered but invocation is denied
 - **THEN** the guide distinguishes `GetInferenceProfile` from invocation and
   directs the owner to inspect both `InvokeModel` resource entries
+
+### Requirement: Getting-started guidance links to the authoritative rollout guide
+
+The public `PANOPTICON.md` getting-started guide SHALL direct readers to
+`docs/setup-guide.md` as the authoritative source for the four-gate rollout and
+troubleshooting process, rather than duplicating that process in a second
+document.
+
+#### Scenario: A child maintainer starts from the getting-started guide
+
+- **WHEN** a reader follows the public getting-started guide for onboarding
+- **THEN** the guide contains a link to `docs/setup-guide.md` for the complete
+  four-gate setup and recovery instructions

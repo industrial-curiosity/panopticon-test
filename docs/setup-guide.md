@@ -235,12 +235,12 @@ Read the run-page banner before opening job logs. A zero-job **workflow file
 issue** can mean that the private instance does not permit the child to call its
 workflow, not that the YAML is missing or invalid.
 
-| Gate | Observable symptom | Authoritative evidence | Owner and scope | Exact recovery | Proof before advancing |
+| Gate | Observable symptom | Authoritative evidence | Owner and scope | Runtime guidance | Proof before advancing |
 | --- | --- | --- | --- | --- | --- |
-| 1. Reusable-workflow access | Zero jobs, `workflow was not found`, or an access/parse banner before any job starts | The run-page banner; the instance Actions access API; then the selected workflow contents API at the configured ref | Instance administrator; normally instance-wide for the allowed organization, with a separate child repository check | Set the instance's **Settings → Actions → General → Access** policy to allow the intended organization or enterprise callers. Do not edit YAML until the access check allows it. | The access endpoint reports an allowed level and the contents lookup returns the selected workflow path at the configured ref. |
-| 2. Effective provider configuration | `missing ... configuration`, missing default, invalid configured name, or stale caller-compatibility revision | The completed provider-configuration workflow, committed `panopticon.config.json`, generated caller's contract comments, and the `Resolve effective provider values` step summary | Instance owner for names/defaults; child owner when its caller is stale | Run exactly one provider configuration workflow above with names only. If the caller is stale, run the child bootstrap command below, review/commit/push the generated caller, and keep old secret names until all affected children are regenerated. | The configuration run is green, the caller-compatibility revision matches the instance or its accepted legacy revision, and effective values resolve before provider preflight without exposing values. |
-| 3. Caller-repository identity and credentials | `id-token` permission errors, OIDC trust denial, `AssumeRoleWithWebIdentity` errors, missing credentials, or a credential wrapper timeout | The credential-step outcome and summary, the child caller's `permissions` block, and `aws sts get-caller-identity` from the caller job | Per child for identity registration and trust; instance owner for the fixed credential action and its configured names | Register the exact child repository in the organization's approved identity system; verify the caller grants `id-token: write` where required; keep instance-managed credentials at `.github/actions/panopticon-aws-credentials/action.yml`. Use the organization's equivalent of `your-org-identity-tool register --repository 'YOUR-ORG/YOUR-CHILD-REPO'`. | The credential step and caller identity check succeed, and the summary identifies the child caller before provider preflight. |
-| 4. Real provider-request compatibility | Credentials and preflight pass, then a real structured request fails with a model, request-shape, unsupported-control, or provider API error | The provider request error and the exact selected model/request shape; never infer this gate from credentials-only preflight | Provider adapter/model owner, with the instance owner responsible for the configured model name | Correct the selected model or adapter request shape, then rerun the same real structured inference through the provider workflow. Do not change IAM or workflow access for a request-shape error. | One real structured inference completes with the rollout model; capability preflight alone is not sufficient proof. |
+| 1. Reusable-workflow access | Zero jobs, `workflow was not found`, or an access/parse banner before any job starts | The run-page banner; the instance Actions access API; then the selected workflow contents API at the configured ref | Instance administrator; normally instance-wide for the allowed organization, with a separate child repository check | Follow the access failure's emitted guidance; do not edit YAML until the access check establishes the gate state. | The access endpoint reports an allowed level and the contents lookup returns the selected workflow path at the configured ref. |
+| 2. Effective provider configuration | `missing ... configuration`, missing default, invalid configured name, or stale caller-compatibility revision | The completed provider-configuration workflow, committed `panopticon.config.json`, generated caller's contract comments, and the `Resolve effective provider values` step summary | Instance owner for names/defaults; child owner when its caller is stale | Follow the provider workflow or bootstrap summary for the affected boundary. | The configuration run is green, the caller-compatibility revision matches the instance or its accepted legacy revision, and effective values resolve before provider preflight without exposing values. |
+| 3. Caller-repository identity and credentials | `id-token` permission errors, OIDC trust denial, `AssumeRoleWithWebIdentity` errors, missing credentials, or a credential wrapper timeout | The credential-step outcome and summary, the child caller's `permissions` block, and `aws sts get-caller-identity` from the caller job | Per child for identity registration and trust; instance owner for the fixed credential action and its configured names | Follow the caller-owned gate-3 summary, which remains available after credential failure or timeout. | The credential step and caller identity check succeed, and the summary identifies the child caller before provider preflight. |
+| 4. Real provider-request compatibility | Credentials and preflight pass, then a real structured request fails with a model, request-shape, unsupported-control, or provider API error | The provider request error and the exact selected model/request shape; never infer this gate from credentials-only preflight | Provider adapter/model owner, with the instance owner responsible for the configured model name | Follow the provider-request failure output and preserve the smallest supported request shape. | One real structured inference completes with the rollout model; capability preflight alone is not sufficient proof. |
 
 #### Pre-child private-workflow access check
 
@@ -291,12 +291,10 @@ separate claim. Organizations using per-repository roles or credential wrappers
 must therefore provision every child separately; the instance's own role is not
 a substitute.
 
-When a credential step fails or times out, read the caller-owned gate-3 summary.
-The Bedrock workflow bounds the instance-managed action at the caller step and
-prints recovery after the action with an `always()`-style condition, so the
-registration instructions remain visible even when the composite action is
-cancelled. A job-level timeout can still cancel every later step; in that case,
-use the run-page evidence and rerun with a measured job-timeout value.
+When a credential step fails or times out, use the caller-owned gate-3 summary
+as the source of recovery instructions. The workflow places that output after
+the credential boundary so it remains available when the composite action is
+cancelled.
 
 Gate 4 needs one real structured request. A green `Provider preflight` step
 proves credentials and capability only; it does not prove that the selected
@@ -343,8 +341,7 @@ workflow inputs.
 
 Request timeout and retry-budget variables are optional. See [provider
 configuration defaults](provider-configuration.md) for their source precedence,
-the configuration-workflow default fields, the fixed instance Action path, and
-the exact child-bootstrap recovery path.
+the configuration-workflow default fields, and the fixed instance Action path.
 
 These are consumed only by the shared CI workflows. Local flows —
 initialization, doc generation,
@@ -514,9 +511,8 @@ authenticated requests have a much higher GitHub API quota. Private instances
 require authentication. Supply a token through your shell or CI secret
 environment; never put its value directly in the launcher command. The launcher
 stops before writing
-if the provider is
-unconfigured or invalid and prints exact console, `gh`, and child-bootstrap
-commands. Optional inputs are:
+if the provider is unconfigured or invalid. Failure-specific recovery appears
+in the bootstrap output when needed. Optional inputs are:
 
 ```bash
 export PANOPTICON_SKILLS_LOCATION=.agents/skills
@@ -569,8 +565,8 @@ There is no manual handoff between documentation generation and finalization.
 Before finalization creates `panopticon/config.json`, documentation generation
 derives the repository, instance, and workflow reference from the caller
 workflow written during bootstrap. If that workflow is missing or malformed,
-rerun the child bootstrap; otherwise the initialization skill continues through
-finalization in the same run.
+the bootstrap or initialization output identifies the next action; otherwise
+the initialization skill continues through finalization in the same run.
 
 ### Phase 3 — Finalize
 
@@ -581,9 +577,9 @@ which validates the agent-produced docs and index and writes
 initialization flag — only once validation passes. Every finalization attempt
 also writes `panopticon-initialization-report.md` in the child repository root.
 Read that report first if initialization is blocked: it identifies the affected
-path or configuration, assigns it to the child repository, organization
-configuration, or template/tooling, and gives the next action. After completing
-an action, rerun the exact finalization command shown in the report.
+path or configuration and assigns it to the child repository, organization
+configuration, or template/tooling. Follow the failure-specific next action
+shown by the report.
 
 ### Commit and push
 

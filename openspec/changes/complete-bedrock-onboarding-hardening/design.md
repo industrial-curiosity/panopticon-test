@@ -216,6 +216,15 @@ access policy and requires the documented administration permission. The
 existing UI and read-only verification remain the source of truth when an
 administrator chooses a different policy.
 
+Bootstrap uses the same shared credential-action recovery formatter when its
+provider-workflow validation finds the fixed instance-managed action missing.
+This keeps terminal/bootstrap failures aligned with the reusable-workflow
+fallback: both identify the provider-owned path, link the public example, show
+the protection fragment for other customizations, explain automatic protection
+of the fixed path, and give the child-bootstrap rerun command. The formatter
+continues to accept only path and repository identifiers and never renders
+credential values.
+
 ### Keep bootstrap renderer failures source-safe
 
 Bootstrap loads the caller renderer from the effective workflow ref before any

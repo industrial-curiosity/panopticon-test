@@ -100,9 +100,8 @@ python3 -m unittest tests.test_provider_workflows -v
 After changing the Action, open a test pull request and check the **Panopticon
 effective provider configuration** section of the workflow summary. It should
 list `instance action` for each output the Action supplied, without showing its
-value. If the summary is unresolved, return an empty output to use the instance
-configuration or workflow fallback, or correct the Action output name. Then
-rerun the failed workflow.
+value. The workflow summary is the source of truth for any unresolved-output
+guidance.
 
 For a caller-visible instance configuration change—such as an Actions-name
 mapping, credential mode, workflow permission, or caller-supplied default—regenerate
@@ -125,8 +124,7 @@ If a Bedrock model is missing from both permitted sources, configuration fails
 before provider preflight and names the logical model plus the checked sources
 without printing either value.
 
-If a required value is missing, create the named organization setting and rerun
-bootstrap. If an optional runtime value is unresolved, correct the named fixed
-Action or instance default and rerun the provider workflow. If the summary says
-the caller is stale, rerun bootstrap, review and commit the generated workflow,
-then rerun the pull request checks.
+If a required or optional value is unresolved, use the bootstrap report or
+workflow summary as the source of the failure-specific next action. If the
+summary identifies a stale caller, it also identifies the affected caller
+boundary and the required regeneration step.

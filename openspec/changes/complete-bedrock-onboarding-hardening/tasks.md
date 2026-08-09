@@ -18,6 +18,7 @@
 - [x] 2.2 Extend shared credential recovery and the Bedrock workflow fallback with the example URL, fixed destination path, copyable `protected_paths` fragment, child-bootstrap command, and automatic-protection note, using the canonical fixed action path binding.
 - [x] 2.3 Add recovery and public-safety tests covering formatter output, inline fallback markers, example content, absence of organization-specific identifiers or credential values, and canonical path binding.
 - [x] 2.4 Update the Bedrock workflow and shared recovery code so the provider registry is the canonical Python path source and the workflow fallback uses one workflow-level path binding.
+- [x] 2.5 Reuse the shared credential-action recovery formatter from bootstrap's missing-action validation, preserving the trusted provider path and adding regression coverage for the example URL, fixed destination, protection fragment, automatic-protection note, rerun command, and source-safe output.
 
 ## 3. Automatic template-sync protection
 
@@ -41,3 +42,4 @@
 
 - [x] 6.1 Add resolver and provider-workflow regression tests proving `legacy_revision` preserves pre-change `job_timeout_minutes` defaults, drops only the newly introduced Bedrock `model` default, equals the pre-change full-contract hash, and lets a pre-change caller with `configuration_defaults` reach the migration gate.
 - [x] 6.2 Codify the invariant that instance-owned operational controls must resolve at an instance/reusable-workflow boundary and must not require child-repository maintainer action.
+- [x] 6.3 Add a provider-workflow regression assertion that `PANOPTICON.md` links to `docs/setup-guide.md` as the authoritative four-gate rollout guide.

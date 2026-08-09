@@ -116,8 +116,8 @@ LiteLLM and OpenAI model identity remains required; Bedrock model identity may
 come from its organization variable or the non-secret instance default
 `llm.defaults.model`. Request budgets are optional and have a documented
 precedence order; see the instance's `docs/provider-configuration.md` for the
-required/optional table, configuration steps, fixed Action contract, and
-recovery commands. Never put credentials or tokens in a default.
+required/optional table, configuration steps, and fixed Action contract. Never
+put credentials or tokens in a default.
 
 ## Four-gate rollout checks
 
@@ -135,39 +135,26 @@ gate is not proven until the earlier one passes:
    gh api "repos/${INSTANCE}/actions/permissions/access" --jq '.access_level'
    ```
 
-   A 403 means the token lacks `Administration: Read`; reauthenticate before
-   interpreting the result. An access level of `none` is an instance policy
-   problem, not proof that the called YAML is missing. After access is allowed,
-   check the selected workflow at the configured ref with the GitHub Contents
-   API using `Contents: Read`.
-
-   An instance administrator can repair a denied organization policy with this
-   explicit mutation (it requires the documented administrator permission):
-
-   ```bash
-   gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization
-   ```
+   Use the run-page banner and the access check to establish whether the gate
+   passed. If it fails, follow the recovery instructions emitted for that run.
 
 2. **Effective provider configuration** — a missing value, missing default, or
    stale caller-compatibility revision belongs to the instance contract or this
-   child caller. Run exactly one provider configuration workflow, then rerun the
-   child bootstrap command it prints only when the caller-visible configuration
-   changed. Commit and push regenerated callers before removing old secret
-   names.
+   child caller. If it fails, follow the provider workflow or bootstrap summary;
+   it identifies whether the instance configuration or child caller needs
+   attention.
 3. **Caller identity and credentials** — reusable workflow code does not
    transfer identity. GitHub OIDC identifies this child repository, so verify
    the caller's permissions and register this exact child in the organization's
-   approved identity system. In Bedrock `instance-managed` mode, keep the
-   credential wrapper at
-   `.github/actions/panopticon-aws-credentials/action.yml`. Copy the reviewed
-   example from `docs/examples/panopticon-aws-credentials/action.yml`, replace
-   only the organization broker step, and wait for the caller-owned gate-3 summary
-   if it fails or times out.
+   approved identity system. In Bedrock `instance-managed` mode, the fixed
+   credential wrapper remains instance-owned. If the gate fails or times out,
+   follow the caller-owned gate-3 summary.
 4. **Real provider-request compatibility** — a green provider preflight proves
    credentials and capability, not model request compatibility. Complete one
    real structured inference. Route unsupported fields, model errors, and
    request-shape failures to the provider/model owner rather than changing
    workflow access or IAM.
 
-The full symptom/evidence/owner/recovery/proof table and the exact four-gate
-setup sequence live in the instance's `docs/setup-guide.md`.
+The instance's [setup guide](docs/setup-guide.md) contains the stable setup
+prerequisites and gate evidence definitions. Failure-specific recovery is
+emitted by the bootstrap or workflow that detects it.

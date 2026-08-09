@@ -32,16 +32,16 @@ change is implemented or validated.
 
 | Step | Status | Evidence |
 | --- | --- | --- |
-| 0. Baseline and existing work | implemented | `surface-org-interface-conflicts` archived; the missing pre-change baseline is recorded below. |
-| 1. Workflow contract validation | locally verified | [harden-bedrock-workflow-contract](../openspec/changes/archive/2026-08-01-harden-bedrock-workflow-contract/) and [template CI hardening](../openspec/changes/harden-bootstrap-manifest-and-workflow-ci/): 640 tests, strict OpenSpec validation, and reusable-workflow discovery passed on 2026-08-03. |
-| 2. Bedrock request shape | locally verified | [fix-bedrock-converse-request-shape](../openspec/changes/archive/2026-08-01-fix-bedrock-converse-request-shape/) |
-| 3. Local-tooling manifest | locally verified | [restrict-child-sync-tooling-manifest](../openspec/changes/archive/2026-08-02-restrict-child-sync-tooling-manifest/), [legacy-tooling guidance](../openspec/changes/archive/2026-08-02-complete-rollout-status-and-legacy-tooling-guidance/), and [JSON-manifest hardening](../openspec/changes/harden-bootstrap-manifest-and-workflow-ci/): 640 tests and strict OpenSpec validation passed on 2026-08-03. |
-| 4. Effective provider requirements | locally verified | [model-effective-provider-requirements](../openspec/changes/archive/2026-08-02-model-effective-provider-requirements/) — focused provider coverage: 218 tests; full suite: 632 tests; strict OpenSpec and reusable-workflow contract validation passed on 2026-08-02. |
-| 5. Negative scope and `panopticon-ignore` | unstarted | No assigned OpenSpec change. |
-| 6. Organization-scale interface names | unstarted | No assigned OpenSpec change. |
-| 7. Supported four-gate operating process | locally verified | [harden-four-gate-operating-process](../openspec/changes/archive/2026-08-07-harden-four-gate-operating-process/): 684-test stdlib suite, 28 focused recovery/workflow tests, reusable-workflow contract validation, targeted strict OpenSpec validation, and Markdownlint passed on 2026-08-07. Full `openspec validate --all --strict --no-interactive` passed 15/16 specs; the pre-existing `master-sync` failure is `requirements.3.text` because `SHALL` is not on the first physical requirement line ([spec](../openspec/specs/master-sync/spec.md#L67)). Follow-up: move `SHALL` onto that line and rerun full validation. No private-instance sandbox or live provider request was run, so this step is not operationally proven. |
-| 8. Complex-organization instance template | unstarted | No assigned OpenSpec change. |
-| 9. Sandbox rollout | unstarted | No recorded sandbox run. |
+| 0. Baseline and existing work | implemented | `surface-org-interface-conflicts` is archived. The pre-change baseline was never captured and cannot be reconstructed; the current post-change baseline is recorded below. |
+| 1. Workflow contract validation | locally verified | [harden-bedrock-workflow-contract](../openspec/changes/archive/2026-08-01-harden-bedrock-workflow-contract/) and [template CI hardening](../openspec/changes/harden-bootstrap-manifest-and-workflow-ci/): the current suite and reusable-workflow validation pass; no sandbox job-creation proof is recorded here. |
+| 2. Bedrock request shape | locally verified | [fix-bedrock-converse-request-shape](../openspec/changes/archive/2026-08-01-fix-bedrock-converse-request-shape/); the current suite passes the request-shape coverage, but no real provider request is recorded here. |
+| 3. Local-tooling manifest | locally verified | [restrict-child-sync-tooling-manifest](../openspec/changes/archive/2026-08-02-restrict-child-sync-tooling-manifest/), [legacy-tooling guidance](../openspec/changes/archive/2026-08-02-complete-rollout-status-and-legacy-tooling-guidance/), and [JSON-manifest hardening](../openspec/changes/harden-bootstrap-manifest-and-workflow-ci/); current suite and strict OpenSpec validation pass. |
+| 4. Effective provider requirements | locally verified | [model-effective-provider-requirements](../openspec/changes/archive/2026-08-02-model-effective-provider-requirements/) and [complete-bedrock-onboarding-hardening](../openspec/changes/complete-bedrock-onboarding-hardening); current provider, bootstrap, and compatibility coverage passes. |
+| 5. Negative scope and `panopticon-ignore` | locally verified | [add-negative-scope-and-ignore-hints](../openspec/changes/archive/2026-08-03-add-negative-scope-and-ignore-hints/) is archived and its shared scope policy is implemented in `panopticon/scope.py`; the prior status was stale. |
+| 6. Organization-scale interface names | locally verified | [add-org-aware-interface-naming](../openspec/changes/archive/2026-08-06-add-org-aware-interface-naming/) is archived and its naming/index behavior is implemented; the prior status was stale. |
+| 7. Supported four-gate operating process | locally verified | [harden-four-gate-operating-process](../openspec/changes/archive/2026-08-07-harden-four-gate-operating-process/) plus [complete-bedrock-onboarding-hardening](../openspec/changes/complete-bedrock-onboarding-hardening/): focused recovery coverage (155 tests), full stdlib suite (739 tests), strict OpenSpec validation, and Markdownlint pass. This remains locally verified, not operationally proven; no private-instance sandbox or live provider request was run. |
+| 8. Complex-organization instance template | unstarted | Issue-15 onboarding assets are implemented, including the credential example, automatic protection, model default, and bootstrap recovery. The generic profile schema, deterministic generator, synthetic profiles, generated overlay, and fixture tests remain outstanding. |
+| 9. Sandbox rollout | unstarted | No fresh sandbox instance/child run or recorded real structured inference, sync, and failure-per-gate proof. |
 
 ### Baseline record
 
@@ -49,9 +49,10 @@ The pre-change baseline required by step 0 was not captured and cannot be
 reconstructed truthfully. Record the current verification result below after
 each rollout-hardening change; it is not pre-change evidence.
 
-Current baseline: on 2026-08-02, `python3 -m unittest discover -t . -s tests`
-passed all 632 tests after Step 4. This confirms the current working tree only;
-it is not evidence of the state before rollout hardening began.
+Current baseline: on 2026-08-09, `python3 -m unittest discover -t . -s tests`
+passed all 739 tests after the final bootstrap-recovery fix; the focused
+bootstrap/recovery suite passed 155 tests. This confirms the current working
+tree only; it is not evidence of the state before rollout hardening began.
 
 ## Outcome and success criteria
 
@@ -723,7 +724,7 @@ After the first successful write, verify:
 | P1 | #11 illustrative code | Shared file iteration does not exclude common illustrative paths | Step 5 |
 | P1 | #12 deterministic override | No `panopticon-ignore` hint exists | Step 5 |
 | P1 | #16 global identity | Naming guidance remains local-function-first | Step 6 |
-| P1 | #15 onboarding complexity | Generic setup omits the complete ordered access/identity gate model | Steps 7–8 |
+| P1 | #15 onboarding complexity | The ordered gate model and most concrete onboarding suggestions are implemented; bootstrap now also gives copyable missing-action recovery. The generic organization profile/generator and real rollout proof remain absent. | Steps 8–9 |
 | Preserve | Provider abstraction | LiteLLM, OpenAI, and Bedrock adapters exist behind the shared client | Step 0 regression coverage |
 | Preserve | OIDC caller permission | Generated Bedrock callers include `id-token: write` | Step 0 regression coverage |
 | Preserve | Python isolation | Bedrock workflow uses isolated Python and a pinned SDK | Step 0 regression coverage |
@@ -793,5 +794,7 @@ in the relevant OpenSpec design before code is written:
    generated child onboarding guide when an organization supplies a private
    provisioning URL?
 
-The next action is to create the Step 1 OpenSpec change for reusable-workflow
-contract validation and the Bedrock workflow cleanup.
+The next action is to design and implement the Step 8 generic
+complex-organization profile/generator, then execute Step 9 in a fresh sandbox
+instance and child. Keep the resulting real-run evidence separate from local
+test and static-validation evidence.

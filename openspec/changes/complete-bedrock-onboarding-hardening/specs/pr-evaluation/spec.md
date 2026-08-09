@@ -61,6 +61,30 @@ instance files.
   manual protection entry for that path and identifies the remaining rerun
   steps
 
+### Requirement: Bootstrap missing-action recovery is copyable
+
+Child bootstrap SHALL give instance owners the same copyable recovery details
+when the configured instance-managed credential action is absent: the public
+example URL, the exact fixed destination path, the `protected_paths` fragment
+for other customizations, the instance-managed automatic-protection note, and
+the child-bootstrap rerun command. Bootstrap SHALL obtain the fixed path from
+the trusted provider contract and SHALL NOT print credential values.
+
+#### Scenario: Bootstrap validates an absent instance-managed action
+
+- **GIVEN** the trusted Bedrock contract selects `instance-managed`
+- **WHEN** bootstrap cannot find the fixed credential action in the instance
+- **THEN** the error identifies the missing path, links to the public example,
+  includes the copyable protection fragment and automatic-protection note, and
+  provides the child-bootstrap rerun command
+
+#### Scenario: Bootstrap recovery remains source-safe
+
+- **GIVEN** bootstrap renders recovery for a missing credential action
+- **WHEN** the error is written to the terminal or initialization report
+- **THEN** it contains no credential value, token, role value, or
+  organization-specific identity value
+
 ## MODIFIED Requirements
 
 ### Requirement: Bounded PR-evaluation job duration
