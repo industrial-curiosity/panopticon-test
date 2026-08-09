@@ -1,10 +1,12 @@
 """Org and repo configuration: defaults, overrides in both directions, initialization flag."""
 
+import hashlib
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+import panopticon.providers as providers
 from panopticon.config import (
     ConfigError,
     DEFAULT_DIAGRAM_FORMAT,
@@ -27,6 +29,7 @@ from panopticon.providers import (
     resolve_provider_contract,
 )
 from panopticon.provider_defaults import resolve_for_workflow
+from panopticon.bootstrap import manual_verification_steps
 
 
 class TestOrgConfig(unittest.TestCase):
@@ -86,6 +89,14 @@ class TestOrgConfig(unittest.TestCase):
         self.assertEqual(contract["variables"]["aws_region"], "PANOPTICON_AWS_REGION")
         self.assertEqual(contract["dependencies"], ["boto3==1.43.51"])
 
+    def test_bedrock_model_is_optional_but_keeps_the_configured_actions_name(self):
+        contract = resolve_provider_contract(
+            {"provider": "bedrock", "variables": {"model": "ACME_BEDROCK_MODEL"}}
+        )
+        self.assertIn("model", contract["optional_variables"])
+        self.assertEqual(contract["variables"]["model"], "ACME_BEDROCK_MODEL")
+        self.assertNotIn("model", contract["template_defaults"])
+
     def test_bedrock_instance_managed_contract_has_no_oidc_variables(self):
         contract = resolve_provider_contract(
             {"provider": "bedrock", "credential_mode": "instance-managed"}
@@ -118,6 +129,7 @@ class TestOrgConfig(unittest.TestCase):
             {"provider": "litellm", "secrets": {"api_key": "ACME_LLM_KEY"}}
         )
         self.assertNotEqual(original["revision"], renamed["revision"])
+        self.assertNotEqual(original["caller_revision"], renamed["caller_revision"])
 
     def test_revision_is_stable_for_equivalent_contracts(self):
         first = resolve_provider_contract({"provider": "bedrock"})
@@ -134,6 +146,196 @@ class TestOrgConfig(unittest.TestCase):
     def test_default_for_required_value_is_rejected(self):
         with self.assertRaisesRegex(ProviderConfigError, "defaults"):
             resolve_provider_contract({"provider": "litellm", "defaults": {"model": "x"}})
+
+    def test_bedrock_model_default_is_runtime_only_for_caller_revision(self):
+        original = resolve_provider_contract({"provider": "bedrock"})
+        configured = resolve_provider_contract(
+            {"provider": "bedrock", "defaults": {"model": "amazon.synthetic-model"}}
+        )
+        self.assertNotEqual(original["revision"], configured["revision"])
+        self.assertEqual(original["caller_revision"], configured["caller_revision"])
+
+    def test_instance_operational_defaults_are_runtime_only_for_caller_revision(self):
+        for logical, value in (
+            ("timeout_seconds", "45"),
+            ("max_attempts", "4"),
+            ("max_correction_attempts", "3"),
+        ):
+            with self.subTest(logical=logical):
+                original = resolve_provider_contract({"provider": "litellm"})
+                configured = resolve_provider_contract(
+                    {"provider": "litellm", "defaults": {logical: value}}
+                )
+                self.assertNotEqual(original["revision"], configured["revision"])
+                self.assertEqual(original["caller_revision"], configured["caller_revision"])
+
+    def test_bedrock_legacy_revision_matches_pre_optionality_contract_hash(self):
+        contract = resolve_provider_contract({"provider": "bedrock"})
+        legacy = {
+            key: value
+            for key, value in contract.items()
+            if key not in {"revision", "caller_revision", "legacy_revision"}
+        }
+        legacy["optional_variables"] = tuple(
+            logical for logical in legacy["optional_variables"] if logical != "model"
+        )
+        expected = hashlib.sha256(
+            json.dumps(legacy, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        self.assertEqual(contract["legacy_revision"], expected)
+
+    def test_legacy_revision_preserves_pre_change_job_timeout_default(self):
+        contract = resolve_provider_contract(
+            {"provider": "openai", "defaults": {"job_timeout_minutes": "45"}}
+        )
+        legacy = {
+            key: value
+            for key, value in contract.items()
+            if key not in {"revision", "caller_revision", "legacy_revision"}
+        }
+        legacy["defaults"] = {"job_timeout_minutes": "45"}
+        expected = hashlib.sha256(
+            json.dumps(legacy, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        self.assertEqual(contract["legacy_revision"], expected)
+
+    def test_bedrock_model_default_is_removed_from_legacy_revision(self):
+        baseline = resolve_provider_contract({"provider": "bedrock"})
+        configured = resolve_provider_contract(
+            {
+                "provider": "bedrock",
+                "defaults": {
+                    "job_timeout_minutes": "45",
+                    "model": "amazon.synthetic-model",
+                },
+            }
+        )
+        legacy = {
+            key: value
+            for key, value in baseline.items()
+            if key not in {"revision", "caller_revision", "legacy_revision"}
+        }
+        legacy["optional_variables"] = tuple(
+            logical for logical in legacy["optional_variables"] if logical != "model"
+        )
+        legacy["template_defaults"] = {
+            logical: value
+            for logical, value in legacy["template_defaults"].items()
+            if logical != "model"
+        }
+        legacy["defaults"] = {"job_timeout_minutes": "45"}
+        expected = hashlib.sha256(
+            json.dumps(legacy, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        self.assertEqual(configured["legacy_revision"], expected)
+
+    def test_global_contract_version_change_does_not_change_caller_revision(self):
+        for provider in ("litellm", "openai", "bedrock"):
+            with self.subTest(provider=provider):
+                original = resolve_provider_contract({"provider": provider})
+                previous_version = providers.CONTRACT_VERSION
+                try:
+                    providers.CONTRACT_VERSION = previous_version + 1
+                    changed = resolve_provider_contract({"provider": provider})
+                finally:
+                    providers.CONTRACT_VERSION = previous_version
+                self.assertNotEqual(original["revision"], changed["revision"])
+                self.assertEqual(original["caller_revision"], changed["caller_revision"])
+
+    def test_runtime_dependency_change_does_not_change_caller_revision(self):
+        original = resolve_provider_contract({"provider": "bedrock"})
+        definition = providers.PROVIDERS["bedrock"]
+        providers.PROVIDERS["bedrock"] = {
+            **definition,
+            "dependencies": ["boto3==1.43.51", "runtime-only-test==1"],
+        }
+        try:
+            changed = resolve_provider_contract({"provider": "bedrock"})
+        finally:
+            providers.PROVIDERS["bedrock"] = definition
+        self.assertNotEqual(original["revision"], changed["revision"])
+        self.assertEqual(original["caller_revision"], changed["caller_revision"])
+
+    def test_template_default_change_does_not_change_caller_revision(self):
+        original = resolve_provider_contract({"provider": "openai"})
+        previous_default = providers.TEMPLATE_DEFAULTS["job_timeout_minutes"]
+        providers.TEMPLATE_DEFAULTS["job_timeout_minutes"] = "25"
+        try:
+            changed = resolve_provider_contract({"provider": "openai"})
+        finally:
+            providers.TEMPLATE_DEFAULTS["job_timeout_minutes"] = previous_default
+        self.assertNotEqual(original["revision"], changed["revision"])
+        self.assertEqual(original["caller_revision"], changed["caller_revision"])
+
+    def test_legacy_job_timeout_default_is_not_an_effective_provider_default(self):
+        contract = resolve_provider_contract(
+            {"provider": "openai", "defaults": {"job_timeout_minutes": "45"}}
+        )
+        self.assertNotIn("job_timeout_minutes", contract["defaults"])
+
+    def test_required_caller_permission_change_changes_caller_revision(self):
+        original = resolve_provider_contract({"provider": "litellm"})
+        definition = providers.PROVIDERS["litellm"]
+        providers.PROVIDERS["litellm"] = {
+            **definition,
+            "permissions": {**definition["permissions"], "actions": "read"},
+        }
+        try:
+            changed = resolve_provider_contract({"provider": "litellm"})
+        finally:
+            providers.PROVIDERS["litellm"] = definition
+        self.assertNotEqual(original["caller_revision"], changed["caller_revision"])
+
+    def test_bedrock_model_uses_instance_default_when_organization_variable_is_empty(self):
+        contract = resolve_provider_contract(
+            {"provider": "bedrock", "defaults": {"model": "amazon.synthetic-model"}}
+        )
+        values, sources = resolve_effective_values(
+            contract,
+            {
+                "model": "",
+                "aws_region": "us-test-1",
+                "aws_role_arn": "arn:aws:iam::123456789012:role/test",
+            },
+        )
+        self.assertEqual(values["model"], "amazon.synthetic-model")
+        self.assertEqual(sources["model"], "instance config")
+
+    def test_bedrock_organization_model_variable_takes_precedence(self):
+        contract = resolve_provider_contract(
+            {"provider": "bedrock", "defaults": {"model": "amazon.synthetic-model"}}
+        )
+        values, sources = resolve_effective_values(
+            contract,
+            {
+                "model": "org-model",
+                "aws_region": "us-test-1",
+                "aws_role_arn": "arn:aws:iam::123456789012:role/test",
+            },
+        )
+        self.assertEqual(values["model"], "org-model")
+        self.assertEqual(sources["model"], "organization variable")
+
+    def test_bedrock_missing_model_names_checked_sources_without_values(self):
+        contract = resolve_provider_contract({"provider": "bedrock"})
+        with self.assertRaisesRegex(
+            ProviderConfigError,
+            r"optional provider value is unresolved: model; checked organization variable, instance config",
+        ):
+            resolve_effective_values(
+                contract,
+                {
+                    "model": "",
+                    "aws_region": "us-test-1",
+                    "aws_role_arn": "arn:aws:iam::123456789012:role/test",
+                },
+            )
+
+    def test_bedrock_model_name_is_optional_in_prerequisite_reporting(self):
+        contract = resolve_provider_contract({"provider": "bedrock"})
+        report = "\n".join(manual_verification_steps("acme", contract))
+        self.assertNotIn("PANOPTICON_LLM_MODEL", report.split("variables:", 1)[1].split("\n", 1)[0])
+        self.assertIn("optional PANOPTICON_LLM_MODEL (model)", report)
 
     def test_runtime_effective_values_use_source_precedence(self):
         contract = resolve_provider_contract(
@@ -173,6 +375,28 @@ class TestOrgConfig(unittest.TestCase):
             )
         self.assertEqual(values["timeout_seconds"], "45")
         self.assertEqual(sources["timeout_seconds"], "instance config")
+
+    def test_bedrock_workflow_resolver_uses_instance_model_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write_config(
+                tmp,
+                {
+                    "llm": {
+                        "provider": "bedrock",
+                        "defaults": {"model": "amazon.synthetic-model"},
+                    }
+                },
+            )
+            values, sources = resolve_for_workflow(
+                tmp,
+                {
+                    "PANOPTICON_LLM_MODEL": "",
+                    "PANOPTICON_AWS_REGION": "us-test-1",
+                    "PANOPTICON_AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/test",
+                },
+            )
+        self.assertEqual(values["model"], "amazon.synthetic-model")
+        self.assertEqual(sources["model"], "instance config")
 
     def test_invalid_actions_name_is_rejected(self):
         with self.assertRaisesRegex(ProviderConfigError, "GitHub Actions name"):

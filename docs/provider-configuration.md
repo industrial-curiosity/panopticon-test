@@ -16,16 +16,22 @@ config file.
 | --- | --- | --- | --- | --- |
 | Instance token | Yes | Secret | None | Create `PANOPTICON_INSTANCE_TOKEN` (or the selected name) with instance-repository access. |
 | LiteLLM/OpenAI API key | Yes | Secret | None | Create the selected API-key secret. |
-| Model | Yes | Variable | None | Create the selected model variable. |
+| Model | Yes for LiteLLM/OpenAI; no for Bedrock | Variable | Bedrock instance default `llm.defaults.model` | Create the selected model variable, or provide the non-secret Bedrock default below. |
 | LiteLLM endpoint | Yes for LiteLLM | Variable | None | Create the selected endpoint variable. |
 | Bedrock region and role ARN | Yes for `github-oidc` | Variables | None | Create both selected variables; `instance-managed` does not use them. |
 | Request timeout and retry budgets | No | Variable | Instance default, fixed action, then workflow default | Leave unset for the documented workflow defaults, or select a controlled fallback below. |
-| PR job timeout | No | Variable | Instance default embedded in the caller, then workflow default | Use an instance default when the organization needs a shared timeout. |
+| PR job timeout | No | Variable | Reusable-workflow fallback (20 minutes) | Set the mapped organization variable when instance administrators need a different shared timeout. |
 
 An explicit non-empty organization variable always wins. Runtime request budgets
 then use the fixed instance Action, an instance-configured default, and the
 template workflow default. Job timeout cannot use the Action because GitHub
 chooses the job timeout before any Action runs.
+
+For Bedrock, the model variable is optional for prerequisite reporting. Its
+effective value is resolved from the organization variable first, then the
+non-secret `llm.defaults.model` instance configuration. The public template
+does not choose a universal Bedrock model; configure one of those sources
+before provider preflight.
 
 ## Simplest setup: organization values and workflow defaults
 
@@ -47,14 +53,27 @@ chooses the job timeout before any Action runs.
 ## Instance-configured defaults
 
 Each provider configuration workflow has optional non-secret fields for request
-timeout, transport attempts, correction attempts, and job timeout. Enter a
-value only when the organization needs a stable shared fallback. A changed value
-changes the provider contract revision, so every child caller must be regenerated
-with the bootstrap command above.
+timeout, transport attempts, and correction attempts. The Bedrock workflow also
+accepts `model_default`, a model identifier value used only when
+the configured model variable is empty. It is persisted as
+`llm.defaults.model`, never as a secret or credential. Enter a value only when
+the organization needs a stable shared fallback. These instance defaults are
+runtime-only: changing `timeout_seconds`, `max_attempts`,
+`max_correction_attempts`, or the Bedrock `model_default` does not change the
+caller compatibility revision, so existing child callers require no
+regeneration.
+
+Job timeout is controlled by the mapped organization Actions variable
+(`PANOPTICON_LLM_JOB_TIMEOUT_MINUTES` by default). Changing that variable
+affects existing child repositories on their next run and requires no child
+caller regeneration. A legacy `llm.defaults.job_timeout_minutes` value is
+accepted during migration but ignored and is not written by new configuration
+runs.
 
 Use this path for a stable numeric policy. Do not use it for credentials, API
-keys, tokens, model identity, LiteLLM endpoints, or Bedrock identity settings;
-those remain required organization settings.
+keys, tokens, LiteLLM endpoints, or Bedrock identity settings. Bedrock model
+identity is the one non-secret exception: `model_default` may supply it when
+the organization variable is absent.
 
 ## Fixed instance Action for runtime defaults
 
@@ -81,12 +100,14 @@ python3 -m unittest tests.test_provider_workflows -v
 After changing the Action, open a test pull request and check the **Panopticon
 effective provider configuration** section of the workflow summary. It should
 list `instance action` for each output the Action supplied, without showing its
-value. If the summary is unresolved, return an empty output to use the instance
-configuration or workflow fallback, or correct the Action output name. Then
-rerun the failed workflow.
+value. The workflow summary is the source of truth for any unresolved-output
+guidance.
 
-For every instance configuration or Action change, regenerate callers from each
-child repository and commit the result:
+For a caller-visible instance configuration change—such as an Actions-name
+mapping, credential mode, workflow permission, or caller-supplied default—regenerate
+callers from each affected child repository and commit the result. Runtime-only
+provider behavior changes do not require re-bootstrap; the current workflows
+accept the legacy caller revision while existing callers migrate naturally:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-eye/main/install.py | PANOPTICON_INSTANCE='YOUR-ORG/YOUR-INSTANCE' python3
@@ -94,13 +115,16 @@ curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-
 
 ## Verify and recover
 
-Run child bootstrap after any contract change, then inspect
+Run child bootstrap after a caller-visible contract change, then inspect
 `panopticon-initialization-report.md`. The report and PR workflow summary show
 only logical names and source labels such as `organization variable`, `instance
 action`, `instance config`, or `workflow default`.
 
-If a required value is missing, create the named organization setting and rerun
-bootstrap. If an optional runtime value is unresolved, correct the named fixed
-Action or instance default and rerun the provider workflow. If the summary says
-the caller is stale, rerun bootstrap, review and commit the generated workflow,
-then rerun the pull request checks.
+If a Bedrock model is missing from both permitted sources, configuration fails
+before provider preflight and names the logical model plus the checked sources
+without printing either value.
+
+If a required or optional value is unresolved, use the bootstrap report or
+workflow summary as the source of the failure-specific next action. If the
+summary identifies a stale caller, it also identifies the affected caller
+boundary and the required regeneration step.

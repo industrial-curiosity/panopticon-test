@@ -357,6 +357,23 @@ class TestSecretVerification(unittest.TestCase):
         self.assertEqual(variables, ("PANOPTICON_LLM_MODEL", "PANOPTICON_LLM_ENDPOINT"))
         self.assertIn("optional PANOPTICON_LLM_TIMEOUT_SECONDS", "\n".join(status))
 
+    def test_bedrock_model_is_optional_and_reports_both_allowed_sources(self):
+        contract = resolve_provider_contract({"provider": "bedrock"})
+        with tempfile.TemporaryDirectory() as tmp:
+            workflow = Path(tmp) / ".github" / "workflows"
+            workflow.mkdir(parents=True)
+            (workflow / "panopticon-pr.yml").write_text(
+                caller_workflow_text("panopticon-pr.yml", "acme/instance", "main", contract)
+            )
+            secrets, variables = configured_actions_names(tmp)
+            status = configured_optional_value_status(tmp)
+        self.assertIn("PANOPTICON_INSTANCE_TOKEN", secrets)
+        self.assertNotIn("PANOPTICON_LLM_MODEL", variables)
+        self.assertIn(
+            "optional PANOPTICON_LLM_MODEL (model): organization variable or instance config",
+            status,
+        )
+
     def test_missing_secrets_never_block_finalization(self):
         from unittest import mock
 

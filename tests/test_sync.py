@@ -10,11 +10,16 @@ import tempfile
 import unittest
 from io import BytesIO, StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from panopticon import bootstrap
 from panopticon import sync as sync_module
 from panopticon.bootstrap import SKILLS_PREFIX, wire_workflows
-from panopticon.callers import CALLER_WORKFLOWS, caller_workflow_text
+from panopticon.callers import (
+    CALLER_WORKFLOWS,
+    caller_compatibility_revision,
+    caller_workflow_text,
+)
 from panopticon.config import save_repo_config
 from panopticon.providers import resolve_provider_contract
 from panopticon.sync import _api_get, check_updates, git_blob_sha, main
@@ -58,15 +63,18 @@ def _file_response(content_bytes):
     return {"encoding": "base64", "content": base64.b64encode(content_bytes).decode()}
 
 
-def _init_repo_config(child_root, instance="acme/instance"):
+def _init_repo_config(child_root, instance="acme/instance", workflow_ref="main"):
     save_repo_config(
-        {"repo": "svc-a", "instance": instance, "workflow_ref": "main", "docs_location": "docs"},
+        {"repo": "svc-a", "instance": instance, "workflow_ref": workflow_ref, "docs_location": "docs"},
         repo_root=child_root,
     )
 
 
 def _write_current_callers(child_root, contract=None):
-    contract = contract or resolve_provider_contract(ORG_CONFIG["llm"])
+    if contract is None:
+        contract = resolve_provider_contract(
+            ORG_CONFIG["llm"], caller_compatibility_revision
+        )
     workflows = Path(child_root) / ".github" / "workflows"
     workflows.mkdir(parents=True, exist_ok=True)
     for name in CALLER_WORKFLOWS:
@@ -402,13 +410,17 @@ class TestMainCheckUpdates(unittest.TestCase):
             urlopen = _make_urlopen({
                 "contents/panopticon.config.json": _file_response(b'{"llm": {}}'),
             })
-            code = main([], env={}, child_root=tmp, urlopen=urlopen)
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = main([], env={}, child_root=tmp, urlopen=urlopen)
         self.assertEqual(code, 1)
+        self.assertIn("could not read valid instance provider configuration", out.getvalue())
+        self.assertNotIn("could not load instance caller renderer", out.getvalue())
 
 
 class TestMainDefaultOverwrite(unittest.TestCase):
     def _router(self, skill_content=b"# panopticon-foo new", tooling_content_prefix="# ",
-                org_config=ORG_CONFIG):
+                org_config=ORG_CONFIG, caller_source=None):
         skill_path = SKILLS_PREFIX + "panopticon-foo/SKILL.md"
         skill_sha = hashlib.sha1(
             f"blob {len(skill_content)}\0".encode() + skill_content
@@ -417,7 +429,9 @@ class TestMainDefaultOverwrite(unittest.TestCase):
         source_files = {}
         for name in LOCAL_TOOLING_MODULES:
             content = (
-                Path("panopticon/callers.py").read_bytes()
+                caller_source
+                if name == "callers.py" and caller_source is not None
+                else Path("panopticon/callers.py").read_bytes()
                 if name == "callers.py"
                 else f"{tooling_content_prefix}{name}".encode()
             )
@@ -477,7 +491,11 @@ class TestMainDefaultOverwrite(unittest.TestCase):
             local.write_bytes(skill_content)
             for name in LOCAL_TOOLING_MODULES:
                 (Path(tmp) / "panopticon").mkdir(exist_ok=True)
-                content = f"# {name}"
+                content = (
+                    Path("panopticon/callers.py").read_text(encoding="utf-8")
+                    if name == "callers.py"
+                    else f"# {name}"
+                )
                 (Path(tmp) / "panopticon" / name).write_text(content, encoding="utf-8")
 
             def urlopen(request, timeout=30):
@@ -488,13 +506,21 @@ class TestMainDefaultOverwrite(unittest.TestCase):
                     ).hexdigest()
                     tree = [_tree_entry(SKILLS_PREFIX + "panopticon-foo/SKILL.md", skill_sha)]
                     for name in LOCAL_TOOLING_MODULES:
-                        content = f"# {name}".encode()
+                        content = (
+                            Path("panopticon/callers.py").read_bytes()
+                            if name == "callers.py"
+                            else f"# {name}".encode()
+                        )
                         tree.append(_tree_entry(f"panopticon/{name}", hashlib.sha1(
                             f"blob {len(content)}\0".encode() + content
                         ).hexdigest()))
                     return BytesIO(json.dumps({"tree": tree}).encode())
                 if "contents/panopticon.config.json" in url:
                     return BytesIO(json.dumps(_file_response(json.dumps(ORG_CONFIG).encode())).encode())
+                if "contents/panopticon/callers.py" in url:
+                    return BytesIO(json.dumps(_file_response(
+                        Path("panopticon/callers.py").read_bytes()
+                    )).encode())
                 if f"contents/{LOCAL_TOOLING_MANIFEST_PATH}" in url:
                     return BytesIO(json.dumps(_file_response(LOCAL_TOOLING_MANIFEST)).encode())
                 raise AssertionError(f"unexpected url (no download expected): {url}")
@@ -512,6 +538,222 @@ class TestMainDefaultOverwrite(unittest.TestCase):
             path = Path(tmp) / ".github" / "workflows" / "panopticon-resource-sync.yml"
             self.assertEqual(code, 0)
             self.assertIn("shared-child-resource-sync.yml@main", path.read_text())
+
+    def test_missing_local_caller_uses_fetched_renderer_for_contract_revision(self):
+        original_resolver = sync_module.resolve_provider_contract
+        observed = []
+
+        def resolve_provider_contract(llm_config, compatibility_revision=None):
+            observed.append(compatibility_revision)
+            return original_resolver(llm_config, compatibility_revision)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            with patch.object(
+                sync_module,
+                "resolve_provider_contract",
+                side_effect=resolve_provider_contract,
+            ):
+                code = main([], env={}, child_root=tmp, urlopen=self._router())
+
+        self.assertEqual(code, 0)
+        self.assertEqual(len(observed), 1)
+        self.assertIsNotNone(observed[0])
+
+    def test_missing_fetched_caller_revision_fails_without_writing_resources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = main(
+                    [],
+                    env={},
+                    child_root=tmp,
+                    urlopen=self._router(caller_source=b"CALLER_WORKFLOWS = ()\n"),
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_non_callable_fetched_caller_revision_fails_without_writing_resources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            with contextlib.redirect_stdout(out):
+                code = main(
+                    [],
+                    env={},
+                    child_root=tmp,
+                    urlopen=self._router(
+                        caller_source=b"caller_compatibility_revision = None\n"
+                    ),
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_syntax_invalid_fetched_caller_fails_without_traceback_or_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            err = StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = main(
+                    [],
+                    env={},
+                    child_root=tmp,
+                    urlopen=self._router(caller_source=b"def broken(:\n"),
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_stale_local_caller_renderer_is_replaced_by_fetched_renderer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            (Path(tmp) / "panopticon" / "callers.py").write_text(
+                "def caller_compatibility_revision(contract):\n"
+                "    return contract['removed_by_new_renderer']\n",
+                encoding="utf-8",
+            )
+            code = main([], env={}, child_root=tmp, urlopen=self._router())
+
+            self.assertEqual(code, 0)
+            self.assertTrue((Path(tmp) / ".agents").exists())
+            self.assertTrue((Path(tmp) / ".github").exists())
+
+    def test_syntax_invalid_local_caller_is_replaced_from_workflow_ref(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            (Path(tmp) / "panopticon" / "callers.py").write_text(
+                "def broken(:\n", encoding="utf-8"
+            )
+            code = main([], env={}, child_root=tmp, urlopen=self._router())
+
+            self.assertEqual(code, 0)
+            self.assertTrue((Path(tmp) / ".agents").exists())
+            self.assertTrue((Path(tmp) / ".github").exists())
+
+    def test_renderer_execution_failure_has_no_traceback_or_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            err = StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = main(
+                    [], env={}, child_root=tmp,
+                    urlopen=self._router(caller_source=b"raise NameError('renderer load')\n"),
+                )
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_renderer_callback_failure_has_no_traceback_or_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            source = b"def caller_compatibility_revision(contract):\n    raise ValueError('renderer callback')\n"
+            out = StringIO()
+            err = StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = main([], env={}, child_root=tmp, urlopen=self._router(caller_source=source))
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_fetched_renderer_missing_workflow_registry_fails_before_writes(self):
+        source = (
+            b"def caller_compatibility_revision(contract):\n"
+            b"    return 'revision'\n"
+            b"def caller_workflow_text(*args):\n"
+            b"    return ''\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            err = StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = main([], env={}, child_root=tmp, urlopen=self._router(caller_source=source))
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_fetched_renderer_workflow_callback_failure_fails_before_writes(self):
+        source = (
+            b"CALLER_WORKFLOWS = ('panopticon-pr.yml',)\n"
+            b"def caller_compatibility_revision(contract):\n"
+            b"    return 'revision'\n"
+            b"def caller_workflow_text(*args):\n"
+            b"    raise ValueError('workflow renderer')\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            err = StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = main([], env={}, child_root=tmp, urlopen=self._router(caller_source=source))
+
+            self.assertEqual(code, 1)
+            self.assertIn("could not load instance caller renderer", out.getvalue())
+            self.assertNotIn("Traceback", out.getvalue() + err.getvalue())
+            self.assertFalse((Path(tmp) / ".agents").exists())
+            self.assertFalse((Path(tmp) / ".github").exists())
+
+    def test_pinned_workflow_ref_uses_its_renderer_for_generated_revision(self):
+        source = Path("panopticon/callers.py").read_bytes()
+        pinned_source = source.replace(
+            b'"credential_mode": contract.get("credential_mode"),',
+            b'"credential_mode": contract.get("credential_mode"),\n        "pinned": True,',
+        )
+        self.assertNotEqual(source, pinned_source)
+        default_router = self._router()
+
+        def urlopen(request, timeout=30):
+            if "contents/panopticon/callers.py" in request.full_url and "ref=release" in request.full_url:
+                return BytesIO(json.dumps(_file_response(pinned_source)).encode())
+            return default_router(request, timeout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp, workflow_ref="release")
+            code = main([], env={}, child_root=tmp, urlopen=urlopen)
+            caller = (Path(tmp) / ".github" / "workflows" / "panopticon-pr.yml").read_text()
+
+        revision = resolve_provider_contract(
+            ORG_CONFIG["llm"], sync_module._caller_compatibility_revision(pinned_source)
+        )["caller_revision"]
+        self.assertEqual(code, 0)
+        self.assertIn("@release", caller)
+        self.assertIn(f"configuration_revision: {revision}", caller)
+
+    def test_provider_contract_internal_failure_is_not_labeled_renderer_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _init_repo_config(tmp)
+            out = StringIO()
+            with patch.object(
+                sync_module,
+                "resolve_provider_contract",
+                side_effect=AttributeError("provider contract bug"),
+            ):
+                with contextlib.redirect_stdout(out):
+                    with self.assertRaisesRegex(AttributeError, "provider contract bug"):
+                        main([], env={}, child_root=tmp, urlopen=self._router())
+
+            self.assertNotIn("could not load instance caller renderer", out.getvalue())
 
     def test_sync_preserves_protected_and_child_owned_files_without_deleting_legacy_files(self):
         with tempfile.TemporaryDirectory() as tmp:

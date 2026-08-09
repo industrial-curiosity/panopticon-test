@@ -2,6 +2,19 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [harden-rollout-preflight-feedback] - 2026-08-07
+
+### Changed
+
+- Private reusable-workflow preflight guidance now identifies the required
+  instance-repository token permissions, valid access response field, and
+  recovery for authentication failures.
+
+### Fixed
+
+- Provider workflow configuration failures now emit GitHub error annotations on
+  stdout while retaining actionable step summaries.
+
 ## [add-org-aware-interface-naming] - 2026-08-06
 
 ### Added

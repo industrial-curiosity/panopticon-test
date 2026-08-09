@@ -63,7 +63,12 @@ def build_parser():
     parser.add_argument("--instance-root", default=".")
     parser.add_argument("--provider", required=True, choices=tuple(PROVIDERS))
     parser.add_argument("--credential-mode")
-    for logical in ("timeout_seconds", "max_attempts", "max_correction_attempts", "job_timeout_minutes"):
+    for logical in (
+        "model",
+        "timeout_seconds",
+        "max_attempts",
+        "max_correction_attempts",
+    ):
         parser.add_argument(f"--{logical.replace('_', '-')}-default")
     logical_names = {
         logical: default
@@ -88,6 +93,8 @@ def main(argv=None):
         for key, value in vars(args).items()
         if key.endswith("_default") and value is not None
     }
+    if args.provider != "bedrock" and args.model_default is not None:
+        raise SystemExit("error: --model-default is supported only with --provider bedrock")
     try:
         llm = configure(args.instance_root, args.provider, names, args.credential_mode, defaults)
     except (ProviderConfigError, json.JSONDecodeError) as exc:

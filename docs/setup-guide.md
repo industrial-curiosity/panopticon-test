@@ -181,9 +181,11 @@ endpoint and API key.
    child repositories. Copy the subject format from GitHub's current OIDC
    reference rather than guessing it.
 3. Grant that role `bedrock:InvokeModel` on the selected model or
-   inference-profile resources. Converse uses
-   that permission; inference profiles may also require
-   `bedrock:GetInferenceProfile`. See AWS's
+   inference-profile resources. For an application inference profile, grant
+   `bedrock:InvokeModel` on both the selected profile ARN and its underlying
+   foundation-model ARN. Converse uses that permission; retain
+   `bedrock:GetInferenceProfile` separately when the integration discovers or
+   reads profile metadata. See AWS's
    [Bedrock inference
    prerequisites](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-prereq.html).
 4. Put the role ARN and region into the organization variables named by
@@ -193,34 +195,111 @@ endpoint and API key.
 
 ### Bedrock instance-managed credential action checklist
 
-1. Add `.github/actions/panopticon-aws-credentials/action.yml` to the instance
-   repository. This
-   fixed path is deliberate: child repositories cannot select an arbitrary
-   action.
-2. Have the action configure AWS credentials using your organization's approved
-   mechanism.
-3. Have the action write the selected region to `$GITHUB_ENV`, for example
-   `echo "PANOPTICON_AWS_REGION=us-east-1" >> "$GITHUB_ENV"`.
+1. Copy the reviewed [credential-action example](examples/panopticon-aws-credentials/action.yml)
+   to `.github/actions/panopticon-aws-credentials/action.yml`. This fixed path
+   is deliberate: child repositories cannot select an arbitrary action.
+2. Replace only the example's organization broker step with the approved
+   organization mechanism. The action runs for the child caller identity and
+   accepts no credential value through Panopticon configuration.
+3. Have the action write the selected region to `$GITHUB_ENV` as
+   `PANOPTICON_AWS_REGION` and preserve the example's `aws_region` output
+   contract. Verify that output before committing the action.
 4. Select `instance-managed` in **Configure Panopticon — Bedrock**. Do not
    create
    `PANOPTICON_AWS_REGION` or `PANOPTICON_AWS_ROLE_ARN` solely for Panopticon in
    this mode.
 
+When the trusted provider contract selects Bedrock `instance-managed`, template
+sync automatically protects the fixed credential-action path with the runtime
+`merge.ours` driver. Add that path to `protected_paths` only when documenting a
+separate custom instance file.
+
 For an existing instance, sync the template to replace the generic configuration
-workflow with both
-provider-specific entrypoints. An already configured instance does not need to
-rerun configuration or child
-bootstrap solely because of this workflow split. If you change the provider,
-credential mode, or configured
-names, run the matching configuration workflow and then rerun bootstrap in every
-child. Review, commit, and
-push each generated caller change before removing old secret names or workflow
-versions. If the
-instance-token secret name changes, keep the old secret available until every
-child caller has been
-regenerated; removing it early can prevent instance checkout before the workflow
-can diagnose a stale
-revision.
+workflow with all three provider-specific entrypoints. An already configured
+instance does not need to rerun configuration or child bootstrap solely because
+of this workflow split. If you change the provider, credential mode, or
+configured names, run the matching configuration workflow and then rerun
+bootstrap in every child. Review, commit, and push each generated caller change
+before removing old secret names or workflow versions. If the instance-token
+secret name changes, keep the old secret available until every child caller has
+been regenerated; removing it early can prevent instance checkout before the
+workflow can diagnose a stale caller-compatibility revision. Runtime-only
+provider behavior changes, such as adding an optional effective-value source,
+do not require child bootstrap.
+
+### Four-gate rollout and troubleshooting
+
+Treat the first child run as four ordered gates. Record the last gate that has
+green evidence; a green gate proves only that the run reached the next boundary.
+Read the run-page banner before opening job logs. A zero-job **workflow file
+issue** can mean that the private instance does not permit the child to call its
+workflow, not that the YAML is missing or invalid.
+
+| Gate | Observable symptom | Authoritative evidence | Owner and scope | Runtime guidance | Proof before advancing |
+| --- | --- | --- | --- | --- | --- |
+| 1. Reusable-workflow access | Zero jobs, `workflow was not found`, or an access/parse banner before any job starts | The run-page banner; the instance Actions access API; then the selected workflow contents API at the configured ref | Instance administrator; normally instance-wide for the allowed organization, with a separate child repository check | Follow the access failure's emitted guidance; do not edit YAML until the access check establishes the gate state. | The access endpoint reports an allowed level and the contents lookup returns the selected workflow path at the configured ref. |
+| 2. Effective provider configuration | `missing ... configuration`, missing default, invalid configured name, or stale caller-compatibility revision | The completed provider-configuration workflow, committed `panopticon.config.json`, generated caller's contract comments, and the `Resolve effective provider values` step summary | Instance owner for names/defaults; child owner when its caller is stale | Follow the provider workflow or bootstrap summary for the affected boundary. | The configuration run is green, the caller-compatibility revision matches the instance or its accepted legacy revision, and effective values resolve before provider preflight without exposing values. |
+| 3. Caller-repository identity and credentials | `id-token` permission errors, OIDC trust denial, `AssumeRoleWithWebIdentity` errors, missing credentials, or a credential wrapper timeout | The credential-step outcome and summary, the child caller's `permissions` block, and `aws sts get-caller-identity` from the caller job | Per child for identity registration and trust; instance owner for the fixed credential action and its configured names | Follow the caller-owned gate-3 summary, which remains available after credential failure or timeout. | The credential step and caller identity check succeed, and the summary identifies the child caller before provider preflight. |
+| 4. Real provider-request compatibility | Credentials and preflight pass, then a real structured request fails with a model, request-shape, unsupported-control, or provider API error | The provider request error and the exact selected model/request shape; never infer this gate from credentials-only preflight | Provider adapter/model owner, with the instance owner responsible for the configured model name | Follow the provider-request failure output and preserve the smallest supported request shape. | One real structured inference completes with the rollout model; capability preflight alone is not sufficient proof. |
+
+#### Pre-child private-workflow access check
+
+Before writing child files, authenticate as an instance administrator with a
+fine-grained token that has `Administration: Read` and `Contents: Read` on the
+instance repository, or use a classic PAT with `repo` scope. Replace the
+placeholders; do not copy credential values into the command:
+
+```bash
+INSTANCE='YOUR-ORG/YOUR-INSTANCE-REPO'
+WORKFLOW_REF='main'
+PROVIDER='bedrock'  # one of: litellm, openai, bedrock
+
+gh api "repos/${INSTANCE}/actions/permissions/access" \
+  --jq '.access_level'
+gh api "repos/${INSTANCE}/contents/.github/workflows/panopticon-pr-${PROVIDER}.yml?ref=${WORKFLOW_REF}" \
+  --jq '.path'
+```
+
+The matching UI is
+`https://github.com/YOUR-ORG/YOUR-INSTANCE-REPO/settings/actions`. The access
+response must allow the intended organization or enterprise callers before the
+contents lookup is meaningful. If the access request returns HTTP 403,
+reauthenticate with `Administration: Read` on the instance repository; a 403 is
+an authentication failure, not an access-policy result. If the first call
+reports `none`, the instance owner fixes the policy; do not treat the child's
+zero-job banner as evidence that the called workflow is absent. If access is
+allowed but the contents call fails, confirm `Contents: Read`, inspect the
+exact ref and path, and then run the workflow-contract validator against the
+instance copy.
+
+If the read-only check reports `none`, an instance administrator can apply the
+policy mutation below. It changes the instance's reusable-workflow access
+policy and requires an administrator token with the documented administration
+permission; it is not an automated Panopticon step:
+
+```bash
+gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization
+```
+
+Operators who only have read access can use the read-only check and the
+Settings UI path above instead.
+
+The generated caller runs in the child repository's security context. Reusable
+workflow code does not transfer repository identity: for GitHub OIDC, the
+subject identifies the child caller, while the reusable workflow location is a
+separate claim. Organizations using per-repository roles or credential wrappers
+must therefore provision every child separately; the instance's own role is not
+a substitute.
+
+When a credential step fails or times out, use the caller-owned gate-3 summary
+as the source of recovery instructions. The workflow places that output after
+the credential boundary so it remains available when the composite action is
+cancelled.
+
+Gate 4 needs one real structured request. A green `Provider preflight` step
+proves credentials and capability only; it does not prove that the selected
+model accepts every request field. Keep provider-request failures with the
+adapter/model owner and preserve the smallest supported request shape.
 
 ### 2.1 Configure org-level secrets and variables
 
@@ -262,8 +341,7 @@ workflow inputs.
 
 Request timeout and retry-budget variables are optional. See [provider
 configuration defaults](provider-configuration.md) for their source precedence,
-the configuration-workflow default fields, the fixed instance Action path, and
-the exact child-bootstrap recovery path.
+the configuration-workflow default fields, and the fixed instance Action path.
 
 These are consumed only by the shared CI workflows. Local flows —
 initialization, doc generation,
@@ -377,6 +455,22 @@ blocking outcome.
   audit trail. Entries
   are exact file paths, not directory globs — list each customized file
   individually.
+
+#### Protected-path debt register
+
+Treat every `protected_paths` entry as temporary maintenance debt. Add one row
+to this register for each exact path and update it after every template sync:
+
+| Exact path | Reason for protection | Owner | Upstream issue/change that replaces it | Last reconciliation result | Removal condition |
+| --- | --- | --- | --- | --- | --- |
+| `<exact-template-path>` | `<why the instance customization is required>` | `<team or role>` | `<public issue, change, or design reference>` | `<YYYY-MM-DD: result and follow-up>` | `<specific condition for deleting the path>` |
+
+The register is review metadata, not a replacement for the JSON list. Keep
+credential values, account IDs, and private links out of both the public
+template and any contribution copied upstream. Remove a path only after the
+upstream replacement is present, reconciled, and proven by the relevant child
+run.
+
 - **`internal_registries`** *(optional, default `[]`)* — host or URL substrings
   identifying your org's
   own private package registry/registries (e.g. an Artifactory or Nexus host).
@@ -417,9 +511,8 @@ authenticated requests have a much higher GitHub API quota. Private instances
 require authentication. Supply a token through your shell or CI secret
 environment; never put its value directly in the launcher command. The launcher
 stops before writing
-if the provider is
-unconfigured or invalid and prints exact console, `gh`, and child-bootstrap
-commands. Optional inputs are:
+if the provider is unconfigured or invalid. Failure-specific recovery appears
+in the bootstrap output when needed. Optional inputs are:
 
 ```bash
 export PANOPTICON_SKILLS_LOCATION=.agents/skills
@@ -447,7 +540,7 @@ Once a location is chosen, the script will:
   (how the system works,
   where architecture diagrams live, and how to keep this repo's skills/tooling
   current)
-- Wire the three caller GitHub Actions workflows into `.github/workflows/`
+- Wire the four caller GitHub Actions workflows into `.github/workflows/`
 - Check that org secrets and variables are configured (report-only — nothing is
   blocked)
 - Print a reminder of `PANOPTICON.md` and the `python3 -m panopticon.sync`
@@ -472,8 +565,8 @@ There is no manual handoff between documentation generation and finalization.
 Before finalization creates `panopticon/config.json`, documentation generation
 derives the repository, instance, and workflow reference from the caller
 workflow written during bootstrap. If that workflow is missing or malformed,
-rerun the child bootstrap; otherwise the initialization skill continues through
-finalization in the same run.
+the bootstrap or initialization output identifies the next action; otherwise
+the initialization skill continues through finalization in the same run.
 
 ### Phase 3 — Finalize
 
@@ -484,9 +577,9 @@ which validates the agent-produced docs and index and writes
 initialization flag — only once validation passes. Every finalization attempt
 also writes `panopticon-initialization-report.md` in the child repository root.
 Read that report first if initialization is blocked: it identifies the affected
-path or configuration, assigns it to the child repository, organization
-configuration, or template/tooling, and gives the next action. After completing
-an action, rerun the exact finalization command shown in the report.
+path or configuration and assigns it to the child repository, organization
+configuration, or template/tooling. Follow the failure-specific next action
+shown by the report.
 
 ### Commit and push
 
@@ -603,17 +696,10 @@ child-owned modules that are still needed. For an unwanted legacy or CI-only
 module, remove it only in a separate, reviewed change, run the child test suite,
 and commit that removal separately from the tooling refresh.
 
-If you've customized a skill or tooling module at the **instance** level and
-want that
-customization to survive both this script's overwrite and `sync-from-template`'s
-pulls from the
-upstream template, declare it in the instance's `panopticon.config.json` under
-`protected_paths`
-(step 3) — `sync.py` does not consult `protected_paths` itself (it always
-overwrites the child
-unconditionally by design); `protected_paths` only protects the *instance*
-repo's own copy from the
-*template*.
+If you've customized a skill or tooling module at the **instance** level, use
+the protected-path debt register in step 3. That list protects the instance
+copy from template sync only; child `python3 -m panopticon.sync` deliberately
+overwrites its managed resources and does not consult it.
 
 ## 7. Finding the org-wide architecture diagram from a child repo
 

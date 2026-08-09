@@ -73,7 +73,7 @@ import json
 from pathlib import Path
 
 from . import SCHEMA_VERSION
-from .providers import resolve_provider_contract
+from .providers import INSTANCE_CREDENTIAL_ACTION, resolve_provider_contract
 
 ORG_CONFIG_BASENAME = "panopticon.config.json"
 REPO_CONFIG_PATH = Path("panopticon") / "config.json"
@@ -105,10 +105,35 @@ SUPPORTED_DIAGRAM_FORMATS = (DEFAULT_DIAGRAM_FORMAT,)
 PROTECTED_CONFIG_FILES = {
     DIAGRAM_CONFIG_BASENAME: {"format": DEFAULT_DIAGRAM_FORMAT},
 }
+GENERATED_PROTECTED_PATHS = ("docs/architecture.md",)
 
 
 class ConfigError(Exception):
     pass
+
+
+def derive_protected_path_groups(org_config):
+    """Return generated, trusted provider-derived, and org-declared sync paths."""
+    config = org_config if isinstance(org_config, dict) else {}
+    llm = config.get("llm")
+    provider_paths = ()
+    if (
+        isinstance(llm, dict)
+        and llm.get("provider") == "bedrock"
+        and llm.get("credential_mode") == "instance-managed"
+    ):
+        provider_paths = (INSTANCE_CREDENTIAL_ACTION,)
+    return {
+        "generated": GENERATED_PROTECTED_PATHS,
+        "provider": provider_paths,
+        "organization": tuple(config.get("protected_paths", [])),
+    }
+
+
+def derive_protected_paths(org_config):
+    """Return deduplicated runtime merge-protected paths in report order."""
+    groups = derive_protected_path_groups(org_config)
+    return tuple(dict.fromkeys(path for paths in groups.values() for path in paths))
 
 
 def _load_json(path, description):

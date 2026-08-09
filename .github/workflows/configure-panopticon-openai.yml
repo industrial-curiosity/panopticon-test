@@ -44,10 +44,6 @@ on:
         description: Optional non-secret correction-attempt value used when the organization variable is absent (example 2)
         required: false
         default: ""
-      job_timeout_minutes_default:
-        description: Optional non-secret job-timeout value used when the organization variable is absent (example 20)
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -77,5 +73,4 @@ jobs:
           timeout-seconds-default: ${{ inputs.timeout_seconds_default }}
           max-attempts-default: ${{ inputs.max_attempts_default }}
           max-correction-attempts-default: ${{ inputs.max_correction_attempts_default }}
-          job-timeout-minutes-default: ${{ inputs.job_timeout_minutes_default }}
           target-branch: ${{ github.ref_name }}

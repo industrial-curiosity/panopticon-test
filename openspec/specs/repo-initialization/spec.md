@@ -1208,10 +1208,21 @@ endpoint values, selected credential-mode settings, and bounded request/job
 budget names that lack an effective trusted default. Optional values with an
 effective workflow, instance-configured, or fixed-action source SHALL be
 reported as supplied rather than missing. Child repos MUST NOT require per-repo
-secret or variable configuration; generated callers SHALL map organization-level
-names explicitly to canonical provider workflow inputs and secrets. Missing
-values SHALL NOT block documentation or index initialization, but provider
-configuration itself MUST be valid before bootstrap writes any child artifact.
+secret or variable configuration; generated callers SHALL map organization-
+level names explicitly to canonical provider workflow inputs and secrets.
+Missing values SHALL NOT block documentation or index initialization, but
+provider configuration itself MUST be valid before bootstrap writes any child
+artifact. Before writing child artifacts for a private or internal instance,
+the onboarding process SHALL provide the deterministic reusable-workflow access
+check and its recovery path.
+
+The documented private reusable-workflow access preflight SHALL require an
+instance-repository token with `Administration: Read` to query the Actions
+access endpoint and `Contents: Read` to query the selected workflow, or a
+classic PAT with `repo` scope. It SHALL query the access endpoint's
+`access_level` response field. If that access-endpoint request returns HTTP
+403, it SHALL instruct the operator to authenticate with the required
+instance-repository permission before interpreting an access-policy result.
 
 Verifying org-level secrets and variables requires a GitHub auth token with
 permission to read org-level Actions secrets and variables. With a resolved
@@ -1269,6 +1280,16 @@ concise next action without printing its value.
   required provider-resolved secret and variable name, and the source status of
   optional values without treating the missing auth token as an initialization
   failure
+
+#### Scenario: Private instance access is checked before child writes
+
+- **WHEN** a child targets a private or internal instance
+- **THEN** bootstrap or its documented preflight checks the instance Actions
+  access endpoint and selected workflow content at the configured ref before
+  writing child tooling or callers, states the required `Administration: Read`
+  and `Contents: Read` permissions, and gives the instance-owner recovery for
+  either a 403 authentication failure or an access-policy denial instead of
+  assuming the YAML is missing
 
 ### Requirement: Documentation location adoption
 
@@ -1527,16 +1548,16 @@ leave all child files untouched.
 ### Requirement: Child bootstrap generates only the selected provider caller
 
 The child SHALL retain a stable local `.github/workflows/panopticon-pr.yml`
-caller. Bootstrap SHALL point
-that caller at only the provider workflow selected by live instance
-configuration and SHALL emit explicit
-canonical input and secret mappings from the configured org-level names, the
-exact permissions required by
-that provider workflow, the selected trusted credential mode, and the effective
-configuration revision. It
-SHALL map AWS region and role-ARN variables only for Bedrock `github-oidc` mode.
-It SHALL NOT copy
-unselected provider workflows into the child or use blanket `secrets: inherit`.
+caller. Bootstrap SHALL point that caller at only the provider workflow selected
+by live instance configuration and SHALL emit explicit canonical input and
+secret mappings from the configured org-level names, the exact permissions
+required by that provider workflow, the selected trusted credential mode, and
+the effective configuration revision. It SHALL map AWS region and role-ARN
+variables only for Bedrock `github-oidc` mode. It SHALL NOT copy unselected
+provider workflows into the child or use blanket `secrets: inherit`. Onboarding
+documentation SHALL explain that a reusable workflow does not transfer caller
+identity and SHALL give the per-child identity/credential provisioning owner
+and proof step.
 
 #### Scenario: OpenAI child caller generated
 
@@ -1550,24 +1571,25 @@ unselected provider workflows into the child or use blanket `secrets: inherit`.
 
 - **WHEN** the instance selects Bedrock and child bootstrap succeeds
 - **THEN** the local PR caller references the instance's Bedrock reusable
-  workflow, grants `id-token: write`,
-  maps the configured instance-token secret and Bedrock variables explicitly,
-  and includes the config
-  revision
-
-#### Scenario: LiteLLM child caller generated
-
-- **WHEN** the instance selects LiteLLM and child bootstrap succeeds
-- **THEN** the local PR caller references only the instance's LiteLLM workflow,
-  omits Bedrock-only setup,
-  and maps the configured endpoint, model, API-key, and budget names explicitly
+  workflow, grants `id-token: write`, maps the configured instance-token secret
+  and Bedrock variables explicitly, includes the config revision, and the gate
+  guidance identifies the child repository as the OIDC subject owner
 
 #### Scenario: Instance-managed Bedrock child caller generated
 
 - **WHEN** the instance selects Bedrock `instance-managed` credentials and child
   bootstrap succeeds
 - **THEN** the local caller records that credential mode, maps no AWS region or
-  role-ARN variable, and delegates credentials to the instance workflow
+  role-ARN variable, delegates credentials to the instance workflow, and the
+  onboarding proof requires a successful child identity check before provider
+  preflight
+
+#### Scenario: LiteLLM child caller generated
+
+- **WHEN** the instance selects LiteLLM and child bootstrap succeeds
+- **THEN** the local PR caller references only the instance's LiteLLM workflow,
+  omits Bedrock-only setup, and maps the configured endpoint, model, API-key,
+  and budget names explicitly
 
 ### Requirement: Stale caller remediation prints an exact installer command
 
@@ -1924,3 +1946,18 @@ identify the child configuration path and accepted values.
   unsupported value
 - **THEN** initialization or PR evaluation reports the child configuration path
   and states that only `advisory` and `blocking` are accepted
+
+### Requirement: Instance-managed Bedrock setup exposes the reviewed action example
+
+The public setup guide SHALL link to a credential-free composite-action
+skeleton and explain that an instance owner copies it to
+`.github/actions/panopticon-aws-credentials/action.yml`, replaces only the
+organization broker step, verifies the `PANOPTICON_AWS_REGION` output contract,
+and commits the action. The guide and example SHALL accept no credential value
+through Panopticon configuration and SHALL use placeholders only.
+
+#### Scenario: Owner enables instance-managed Bedrock credentials
+
+- **WHEN** an owner selects `instance-managed`
+- **THEN** setup guidance provides the reviewed example, fixed destination,
+  broker adaptation boundary, region-output contract, and validation step

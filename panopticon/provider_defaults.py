@@ -58,8 +58,8 @@ def main(environment=None):
         with open(environment["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
             summary.write(f"## {reason}\n\n")
             summary.write(
-                "Configure the named organization variable, instance default, or fixed "
-                "default action, then rerun.\n"
+                "Configure the named organization variable, permitted instance default, "
+                "or fixed default action, then rerun.\n"
             )
         print(f"::error::{reason}; see the step summary")
         return 1

@@ -111,8 +111,50 @@ acting on that warning is at your discretion.
 
 ## Provider configuration defaults
 
-Provider credentials, model identity, and repository access are required
-organization settings. Request budgets are optional and have a documented
+Provider credentials and repository access are required organization settings.
+LiteLLM and OpenAI model identity remains required; Bedrock model identity may
+come from its organization variable or the non-secret instance default
+`llm.defaults.model`. Request budgets are optional and have a documented
 precedence order; see the instance's `docs/provider-configuration.md` for the
-required/optional table, configuration steps, fixed Action contract, and
-recovery commands. Never put credentials or tokens in a default.
+required/optional table, configuration steps, and fixed Action contract. Never
+put credentials or tokens in a default.
+
+## Four-gate rollout checks
+
+When a child workflow fails, record the last gate with green evidence. A later
+gate is not proven until the earlier one passes:
+
+1. **Reusable-workflow access** — for a private or internal instance, read the
+   run-page banner first. Authenticate as an instance administrator with a
+   fine-grained token that has `Administration: Read` and `Contents: Read` on
+   the instance repository, or use a classic PAT with `repo` scope. Check
+   `https://github.com/YOUR-ORG/YOUR-INSTANCE-REPO/settings/actions` and run:
+
+   ```bash
+   INSTANCE='YOUR-ORG/YOUR-INSTANCE-REPO'
+   gh api "repos/${INSTANCE}/actions/permissions/access" --jq '.access_level'
+   ```
+
+   Use the run-page banner and the access check to establish whether the gate
+   passed. If it fails, follow the recovery instructions emitted for that run.
+
+2. **Effective provider configuration** — a missing value, missing default, or
+   stale caller-compatibility revision belongs to the instance contract or this
+   child caller. If it fails, follow the provider workflow or bootstrap summary;
+   it identifies whether the instance configuration or child caller needs
+   attention.
+3. **Caller identity and credentials** — reusable workflow code does not
+   transfer identity. GitHub OIDC identifies this child repository, so verify
+   the caller's permissions and register this exact child in the organization's
+   approved identity system. In Bedrock `instance-managed` mode, the fixed
+   credential wrapper remains instance-owned. If the gate fails or times out,
+   follow the caller-owned gate-3 summary.
+4. **Real provider-request compatibility** — a green provider preflight proves
+   credentials and capability, not model request compatibility. Complete one
+   real structured inference. Route unsupported fields, model errors, and
+   request-shape failures to the provider/model owner rather than changing
+   workflow access or IAM.
+
+The instance's [setup guide](docs/setup-guide.md) contains the stable setup
+prerequisites and gate evidence definitions. Failure-specific recovery is
+emitted by the bootstrap or workflow that detects it.

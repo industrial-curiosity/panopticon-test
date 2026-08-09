@@ -123,8 +123,34 @@ class TestConfigureInstance(unittest.TestCase):
                 defaults={"timeout_seconds": "45", "job_timeout_minutes": "25"},
             )
             document = json.loads((Path(tmp) / "panopticon.config.json").read_text())
-        self.assertEqual(llm["defaults"], {"timeout_seconds": "45", "job_timeout_minutes": "25"})
+        self.assertEqual(llm["defaults"], {"timeout_seconds": "45"})
         self.assertEqual(document["llm"]["defaults"]["timeout_seconds"], "45")
+        self.assertNotIn("job_timeout_minutes", document["llm"]["defaults"])
+
+    def test_legacy_job_timeout_default_is_accepted_but_not_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = configure(
+                tmp,
+                "litellm",
+                self.litellm_names(),
+                defaults={"job_timeout_minutes": "45"},
+            )
+            document = json.loads((Path(tmp) / "panopticon.config.json").read_text())
+        self.assertEqual(llm.get("defaults", {}), {})
+        self.assertNotIn("job_timeout_minutes", document["llm"].get("defaults", {}))
+
+    def test_bedrock_model_default_is_persisted_as_non_secret_instance_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            llm = configure(
+                tmp,
+                "bedrock",
+                {},
+                defaults={"model": "amazon.synthetic-model"},
+            )
+            document = json.loads((Path(tmp) / "panopticon.config.json").read_text())
+        self.assertEqual(llm["defaults"], {"model": "amazon.synthetic-model"})
+        self.assertEqual(document["llm"]["defaults"]["model"], "amazon.synthetic-model")
+        self.assertNotIn("amazon.secret", json.dumps(document).lower())
 
     def test_required_default_does_not_modify_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -144,6 +170,32 @@ class TestConfigureInstance(unittest.TestCase):
                     main(["--instance-root", tmp, "--provider", "mystery"])
             self.assertEqual(ctx.exception.code, 2)
             self.assertEqual(json.loads(path.read_text()), {"schema_version": 1})
+
+    def test_cli_rejects_non_bedrock_model_default_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "panopticon.config.json"
+            path.write_text('{"schema_version": 1}\n')
+            before = path.read_bytes()
+            with self.assertRaisesRegex(
+                SystemExit, "--model-default is supported only with --provider bedrock"
+            ):
+                main([
+                    "--instance-root", tmp,
+                    "--provider", "litellm",
+                    "--model-default", "amazon.synthetic-model",
+                ])
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_cli_accepts_bedrock_model_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with contextlib.redirect_stdout(StringIO()):
+                main([
+                    "--instance-root", tmp,
+                    "--provider", "bedrock",
+                    "--model-default", "amazon.synthetic-model",
+                ])
+            document = json.loads((Path(tmp) / "panopticon.config.json").read_text())
+        self.assertEqual(document["llm"]["defaults"], {"model": "amazon.synthetic-model"})
 
 
 if __name__ == "__main__":

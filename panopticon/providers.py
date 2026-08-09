@@ -6,6 +6,7 @@ import re
 
 
 CONTRACT_VERSION = 3
+LEGACY_CONTRACT_VERSION = 3
 NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 INSTANCE_CREDENTIAL_ACTION = ".github/actions/panopticon-aws-credentials/action.yml"
 INSTANCE_DEFAULTS_ACTION = ".github/actions/panopticon-provider-defaults/action.yml"
@@ -65,6 +66,7 @@ PROVIDERS = {
         },
         "secrets": {"instance_token": "PANOPTICON_INSTANCE_TOKEN"},
         "variables": {**COMMON_VARIABLES},
+        "optional_variables": ("model",),
         "credential_modes": {
             "github-oidc": {
                 "variables": {
@@ -83,6 +85,33 @@ class ProviderConfigError(ValueError):
     """The instance's provider contract is absent or invalid."""
 
 
+def _hash_contract(contract):
+    serialized = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(serialized).hexdigest()
+
+
+def _legacy_contract(contract, configured_defaults):
+    """Reconstruct the pre-Bedrock-optionality contract for caller migration."""
+    legacy = dict(contract)
+    for field in ("revision", "caller_revision", "legacy_revision"):
+        legacy.pop(field, None)
+    legacy["contract_version"] = LEGACY_CONTRACT_VERSION
+    # Reuse raw validated defaults because effective defaults omit migration-only
+    # job-timeout state that pre-change callers could have embedded.
+    legacy["defaults"] = dict(configured_defaults)
+    if legacy.get("provider") == "bedrock":
+        legacy["optional_variables"] = tuple(
+            logical for logical in legacy["optional_variables"] if logical != "model"
+        )
+        legacy["template_defaults"] = {
+            logical: value
+            for logical, value in legacy["template_defaults"].items()
+            if logical != "model"
+        }
+        legacy["defaults"].pop("model", None)
+    return legacy
+
+
 def supported_providers():
     return tuple(PROVIDERS)
 
@@ -98,7 +127,7 @@ def validate_actions_name(value, description):
     return value
 
 
-def resolve_provider_contract(llm_config):
+def resolve_provider_contract(llm_config, compatibility_revision=None):
     """Return the trusted, effective provider contract or raise a loud configuration error."""
     if not llm_config:
         raise ProviderConfigError("no LLM provider is selected")
@@ -142,7 +171,12 @@ def resolve_provider_contract(llm_config):
     variables_definition = {**definition["variables"], **mode_definition.get("variables", {})}
     unknown_variables = set(configured_variables) - set(variables_definition)
     optional_variables = tuple(
-        logical for logical in OPTIONAL_VARIABLES if logical in variables_definition
+        logical
+        for logical in (
+            *definition.get("optional_variables", ()),
+            *OPTIONAL_VARIABLES,
+        )
+        if logical in variables_definition
     )
     invalid_defaults = set(configured_defaults) - set(optional_variables)
     if unknown_secrets or unknown_variables or invalid_defaults:
@@ -153,6 +187,13 @@ def resolve_provider_contract(llm_config):
         )
     if not all(isinstance(value, str) and value.strip() for value in configured_defaults.values()):
         raise ProviderConfigError("provider config defaults must be non-empty strings")
+    # Existing instances may still carry this pre-boundary field; job timeout is
+    # controlled by the organization variable or workflow before any step runs.
+    effective_defaults = {
+        logical: value
+        for logical, value in configured_defaults.items()
+        if logical != "job_timeout_minutes"
+    }
 
     secrets = {
         logical: validate_actions_name(configured_secrets.get(logical, default), f"{logical} secret")
@@ -174,9 +215,11 @@ def resolve_provider_contract(llm_config):
         "variables": variables,
         "optional_variables": optional_variables,
         "template_defaults": {
-            logical: TEMPLATE_DEFAULTS[logical] for logical in optional_variables
+            logical: TEMPLATE_DEFAULTS[logical]
+            for logical in optional_variables
+            if logical in TEMPLATE_DEFAULTS
         },
-        "defaults": dict(configured_defaults),
+        "defaults": effective_defaults,
         "dependencies": list(definition["dependencies"]),
     }
     if "endpoint" in definition:
@@ -186,8 +229,16 @@ def resolve_provider_contract(llm_config):
     if RUNTIME_OPTIONAL_VARIABLES:
         contract["default_resolver_action"] = INSTANCE_DEFAULTS_ACTION
     contract = {key: value for key, value in contract.items() if value is not None}
-    serialized = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
-    contract["revision"] = hashlib.sha256(serialized).hexdigest()
+    # Keep the full-contract fingerprint for diagnostics and migration tests; callers use caller_revision.
+    contract["revision"] = _hash_contract(contract)
+    if compatibility_revision is None:
+        from .callers import caller_compatibility_revision
+
+        compatibility_revision = caller_compatibility_revision
+    contract["caller_revision"] = compatibility_revision(contract)
+    contract["legacy_revision"] = _hash_contract(
+        _legacy_contract(contract, configured_defaults)
+    )
     return contract
 
 
@@ -221,7 +272,8 @@ def resolve_effective_values(contract, organization_values, action_values=None):
 
     Runtime values use the trusted source order defined by the provider contract.
     Job timeout is intentionally excluded: GitHub evaluates it before any action
-    runs, so generated callers resolve its instance-configured default.
+    runs, so the reusable workflow owns its organization-variable or fallback
+    resolution.
     """
     organization_values = organization_values or {}
     action_values = action_values or {}
@@ -237,17 +289,20 @@ def resolve_effective_values(contract, organization_values, action_values=None):
     for logical in contract["optional_variables"]:
         if logical == "job_timeout_minutes":
             continue
-        candidates = (
-            (organization_values.get(logical), "organization variable"),
-            (action_values.get(logical), "instance action"),
-            (contract["defaults"].get(logical), "instance config"),
-            (contract["template_defaults"].get(logical), "workflow default"),
-        )
+        candidates = [(organization_values.get(logical), "organization variable")]
+        if logical in action_values:
+            candidates.append((action_values[logical], "instance action"))
+        candidates.append((contract["defaults"].get(logical), "instance config"))
+        if logical in contract["template_defaults"]:
+            candidates.append((contract["template_defaults"][logical], "workflow default"))
         for value, source in candidates:
             if isinstance(value, str) and value.strip():
                 values[logical] = value
                 sources[logical] = source
                 break
         else:
-            raise ProviderConfigError(f"optional provider value is unresolved: {logical}")
+            checked = ", ".join(source for _, source in candidates)
+            raise ProviderConfigError(
+                f"optional provider value is unresolved: {logical}; checked {checked}"
+            )
     return values, sources

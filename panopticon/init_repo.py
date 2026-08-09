@@ -255,10 +255,12 @@ def configured_optional_value_status(child_root):
         configured_name = configured.get(logical)
         if not configured_name:
             continue
-        if logical in defaults:
-            source = "instance config"
+        if logical == "model":
+            source = "organization variable or instance config"
         elif logical == "job_timeout_minutes":
-            source = "workflow default in generated caller"
+            source = "workflow default in reusable workflow"
+        elif logical in defaults:
+            source = "instance config (organization variable takes precedence)"
         else:
             source = "workflow default (or fixed instance action during CI)"
         status.append(f"optional {configured_name} ({logical}): {source}")

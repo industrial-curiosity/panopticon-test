@@ -339,23 +339,42 @@ def _fetch_org_config(owner, repo, ref, token=None, urlopen=urllib.request.urlop
         ) from exc
 
 
-def _caller_updates(child_root, instance, ref, contract, default_branch):
-    """Return managed caller paths whose generated content differs from the child copy."""
-    # This import happens only after the complete managed directory is in
-    # place.  It is deliberately not an import-time dependency of sync.py:
-    # older children may be missing this newly introduced module.
-    from .callers import CALLER_WORKFLOWS, caller_workflow_text
+def _caller_namespace(source):
+    namespace = {"__name__": "panopticon.callers_preview"}
+    # Renderer code is remote, but provider configuration is resolved separately
+    # so renderer failures remain distinct from provider configuration failures.
+    try:
+        exec(compile(source, "panopticon/callers.py", "exec"), namespace)
+    except Exception as exc:
+        raise CallerRendererError(f"could not execute caller renderer: {exc}") from exc
+    return namespace
 
-    updates = []
-    for name in CALLER_WORKFLOWS:
-        relative = f".github/workflows/{name}"
-        expected = caller_workflow_text(name, instance, ref, contract, default_branch)
-        path = Path(child_root) / relative
-        if not path.is_file():
-            updates.append((relative, expected, "would be created (missing locally)"))
-        elif path.read_text(encoding="utf-8") != expected:
-            updates.append((relative, expected, "would be updated (content differs from generated caller)"))
-    return updates
+
+def _caller_compatibility_revision(source):
+    namespace = _caller_namespace(source)
+    compatibility_revision = namespace.get("caller_compatibility_revision")
+    if not callable(compatibility_revision):
+        raise RuntimeError(
+            "instance caller renderer does not export callable "
+            "caller_compatibility_revision"
+        )
+    return compatibility_revision
+
+
+class CallerRendererError(RuntimeError):
+    """The caller renderer could not provide a compatible revision."""
+
+
+def _guard_caller_compatibility_revision(compatibility_revision):
+    def guarded(contract):
+        try:
+            return compatibility_revision(contract)
+        except Exception as exc:
+            raise CallerRendererError(
+                f"caller compatibility revision failed: {exc}"
+            ) from exc
+
+    return guarded
 
 
 def _caller_updates_from_source(source, child_root, instance, ref, contract, default_branch):
@@ -365,14 +384,19 @@ def _caller_updates_from_source(source, child_root, instance, ref, contract, def
     remain read-only, so it loads the trusted instance copy in memory rather
     than creating the module merely to preview the generated callers.
     """
-    namespace = {"__name__": "panopticon.callers_preview"}
-    exec(compile(source, "panopticon/callers.py", "exec"), namespace)
+    namespace = _caller_namespace(source)
+    try:
+        workflow_names = tuple(namespace["CALLER_WORKFLOWS"])
+        render_workflow = namespace["caller_workflow_text"]
+    except Exception as exc:
+        raise CallerRendererError(f"could not load caller workflows: {exc}") from exc
     updates = []
-    for name in namespace["CALLER_WORKFLOWS"]:
+    for name in workflow_names:
         relative = f".github/workflows/{name}"
-        expected = namespace["caller_workflow_text"](
-            name, instance, ref, contract, default_branch
-        )
+        try:
+            expected = render_workflow(name, instance, ref, contract, default_branch)
+        except Exception as exc:
+            raise CallerRendererError(f"caller workflow rendering failed: {exc}") from exc
         path = Path(child_root) / relative
         if not path.is_file():
             updates.append((relative, expected, "would be created (missing locally)"))
@@ -427,9 +451,28 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
 
     try:
         org_config = _fetch_org_config(owner, repo, workflow_ref, token, urlopen)
-        contract = resolve_provider_contract(org_config.get("llm"))
     except (RuntimeError, ProviderConfigError) as exc:
         print(f"error: could not read valid instance provider configuration: {exc}")
+        return 1
+
+    try:
+        caller_source = _fetch_file_bytes(
+            owner, repo, "panopticon/callers.py", workflow_ref, token, urlopen
+        )
+        compatibility_revision = _caller_compatibility_revision(caller_source)
+    except Exception as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
+        return 1
+
+    compatibility_revision = _guard_caller_compatibility_revision(compatibility_revision)
+
+    try:
+        contract = resolve_provider_contract(org_config.get("llm"), compatibility_revision)
+    except ProviderConfigError as exc:
+        print(f"error: could not read valid instance provider configuration: {exc}")
+        return 1
+    except CallerRendererError as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
         return 1
 
     try:
@@ -440,25 +483,20 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     except RuntimeError as exc:
         print(f"error: could not load instance local-tooling manifest: {exc}")
         return 1
-    callers_path = Path(child_root) / "panopticon/callers.py"
     try:
         tooling_findings = check_updates(tree, child_root, location, tooling_modules)
     except RuntimeError as exc:
         print(f"error: could not use instance local-tooling manifest: {exc}")
         return 1
 
-    if callers_path.is_file():
-        callers = _caller_updates(
-            child_root, repo_config["instance"], workflow_ref, contract, default_branch
-        )
-    else:
-        caller_source = _fetch_file_bytes(
-            owner, repo, "panopticon/callers.py", default_branch, token, urlopen
-        )
+    try:
         callers = _caller_updates_from_source(
             caller_source, child_root, repo_config["instance"], workflow_ref, contract,
             default_branch,
         )
+    except CallerRendererError as exc:
+        print(f"error: could not load instance caller renderer: {exc}")
+        return 1
     resource_findings = tooling_findings + [
         f"{relative} {reason}" for relative, _, reason in callers
     ]
@@ -487,11 +525,7 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     n_modules = download_local_tooling(
         owner, repo, default_branch, tree, tooling_modules, token, child_root, urlopen
     )
-    # The staged directory may have added callers.py or changed its renderer.
-    # Read the canonical contract only after that full resource set is applied.
-    callers = _caller_updates(
-        child_root, repo_config["instance"], workflow_ref, contract, default_branch
-    )
+    # Reuse the pre-write render so renderer failures cannot occur after managed resources are written.
     _write_callers(child_root, callers)
     print(
         f"{n_skills} skill file(s), {n_modules} tooling module(s), and {len(callers)} workflow caller(s) synced from "

@@ -370,3 +370,41 @@ SHALL remain non-blocking `::warning::` output and SHALL not alter files.
   `.gitignore`, or bytecode
 - **WHEN** tooling-currency runs in the PR workflow
 - **THEN** it emits no unmanaged-tooling warning for that state file
+
+### Requirement: Trusted instance-managed Bedrock action is automatically protected
+
+Template sync SHALL derive the fixed
+`.github/actions/panopticon-aws-credentials/action.yml` path when the raw
+instance configuration selects provider `bedrock` and credential mode
+`instance-managed`. It SHALL write that provider-derived path to runtime
+`.git/info/attributes` using `merge.ours`, report it separately from generated
+and organization-declared paths, and use the same derivation in local recovery
+instructions. No configuration field SHALL replace the fixed path.
+
+#### Scenario: Instance-managed action survives sync
+
+- **GIVEN** the trusted raw contract selects Bedrock `instance-managed`
+- **WHEN** template sync changes the fixed action path
+- **THEN** the instance action remains unchanged and the summary identifies the
+  provider-derived protected path
+
+#### Scenario: Other modes do not protect the action
+
+- **GIVEN** the instance is unconfigured, uses another provider, or uses
+  Bedrock `github-oidc`
+- **WHEN** template sync registers paths
+- **THEN** it does not add the Bedrock action unless the organization explicitly
+  lists it in `protected_paths`
+
+### Requirement: Protected-path derivation tolerates non-object input
+
+The deterministic protected-path derivation helper SHALL treat a non-object
+instance configuration as an empty configuration and SHALL return generated
+template paths without raising an attribute error.
+
+#### Scenario: Invalid sync configuration remains safe to inspect
+
+- **GIVEN** protected-path derivation receives a non-object value
+- **WHEN** template sync prepares runtime merge attributes
+- **THEN** it returns only generated template paths and continues to the
+  existing provider-configuration validation boundary

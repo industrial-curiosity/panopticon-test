@@ -63,6 +63,32 @@ interface indexing — run through the user's preferred AI agent with the bundle
 skills and need no Panopticon LLM secrets. Missing, stale, unreachable, or
 incapable provider configuration fails loudly with exact instance-configuration
 or child-bootstrap recovery commands; it never skips or falls back.
+Shared CLI parsers may expose a consistent option surface across providers, but
+must reject a non-empty provider-specific option at the CLI boundary with a
+message naming the supported provider before generic configuration or writes.
+
+Generated caller compatibility is owned by the caller renderer. Hash the
+semantic reusable-workflow target, caller permissions, mappings, secrets, and
+caller-supplied values, while keeping shared-workflow fallbacks outside the
+caller ABI whenever GitHub can apply them before job steps run. Runtime-only
+fallback changes should not require child re-bootstrap; invalidate callers
+only when their rendered invocation can no longer be accepted safely.
+Reusable workflow contracts SHALL declare only caller inputs consumed by the
+workflow body, except for an explicitly time-bounded migration shim that is
+declared optional, ignored, and covered by dispatch-level compatibility tests;
+generated callers SHALL omit that shim. Renderer loading boundaries SHALL convert ordinary
+renderer exceptions into the caller-renderer diagnostic before any managed
+resource write; bootstrap renderer retrieval may fall back only for a 404 or
+connection-level failure, never for authentication or other API failures.
+Instance-owned operational controls SHALL resolve at the instance or reusable-
+workflow boundary so administrators can change them without requiring child
+repository maintainers to regenerate or commit callers. When a platform
+evaluates a setting before instance steps run, use the organization-level
+control exposed to the reusable workflow and keep legacy instance fields
+migration-only rather than advertising a dead fallback.
+Load, validate, and render the caller before writing any managed sync resource;
+reuse that validated render for the write so renderer failures remain controlled
+and cannot occur after partial sync.
 
 ## Sync and auth model
 

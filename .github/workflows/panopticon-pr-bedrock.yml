@@ -3,7 +3,8 @@
 # Lives in the instance repo (a copy of this template); child repos call it via a thin caller
 # written by the bootstrap installer with explicit secret and variable mappings.
 # Org-level variables for github-oidc: PANOPTICON_AWS_REGION, PANOPTICON_AWS_ROLE_ARN.
-# Both credential modes use: PANOPTICON_LLM_MODEL,
+# Both credential modes may use PANOPTICON_LLM_MODEL; Bedrock can resolve it from
+# the non-secret instance default `llm.defaults.model` when that variable is empty.
 # PANOPTICON_LLM_TIMEOUT_SECONDS, PANOPTICON_LLM_MAX_ATTEMPTS,
 # PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS, PANOPTICON_LLM_JOB_TIMEOUT_MINUTES. Optional request
 # budgets resolve after instance checkout: org variable → fixed instance action → instance config
@@ -32,6 +33,7 @@ on:
         required: true
         type: string
       configuration_defaults:
+        description: Legacy caller mapping retained only for migration; ignored.
         required: false
         type: string
         default: "{}"
@@ -86,6 +88,7 @@ jobs:
       pull-requests: write
     env:
       PANOPTICON_INSTANCE_DIR: .panopticon-instance
+      PANOPTICON_CREDENTIAL_ACTION: .github/actions/panopticon-aws-credentials/action.yml
       # The child repo's own panopticon/ (vendored local-tooling subset — see
       # bootstrap.py's LOCAL_TOOLING_MODULES) shares its package name with the instance repo's
       # full copy on PYTHONPATH below. Without this, `python3 -m`/`-c` prepend the checkout's cwd
@@ -152,10 +155,13 @@ jobs:
           if mode not in {"github-oidc", "instance-managed"}:
               reason = f"Unsupported Bedrock credential mode: {mode}"
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-                  summary.write(f"## {reason}\n\n")
-                  summary.write("Set `credential_mode` to `github-oidc` or `instance-managed`, then rerun this workflow.\n")
-              raise SystemExit(f"::error::{reason}; see the step summary")
-          required = {"model": "PANOPTICON_LLM_MODEL", "instance_token": "PANOPTICON_INSTANCE_TOKEN"}
+                  summary.write("## Panopticon gate 2 failed: effective provider configuration\n\n")
+                  summary.write(f"- Evidence: {reason}\n")
+                  summary.write("- Scope: the provider contract is instance-wide; the generated caller mapping is per child.\n")
+                  summary.write("- Fix location: select `github-oidc` or `instance-managed` in the instance provider configuration, then rerun this workflow.\n")
+              print(f"::error::{reason}; see the step summary")
+              raise SystemExit(1)
+          required = {"instance_token": "PANOPTICON_INSTANCE_TOKEN"}
           if mode == "github-oidc":
               required.update({"aws_region": "PANOPTICON_AWS_REGION", "aws_role_arn": "PANOPTICON_AWS_ROLE_ARN"})
           configured_names = json.loads(os.environ["CONFIGURATION_NAMES"])
@@ -177,11 +183,15 @@ jobs:
                       f"PANOPTICON_INSTANCE='{os.environ['INSTANCE']}' python3"
                   )
                   recovery = (
-                      "## Panopticon: missing Bedrock configuration\n\n"
-                      + "".join(f"- `{configured_name}` ({logical})\n" for logical, configured_name in missing)
-                      + "\nThe instance configuration or child caller is stale. From inside the child clone run:\n\n"
+                      "## Panopticon gate 2 failed: effective provider configuration\n\n"
+                      "- Provider: `Bedrock`\n"
+                      "- Expected configured names:\n"
+                      + "".join(f"  - `{configured_name}` ({logical})\n" for logical, configured_name in missing)
+                      + "- Scope: the provider contract is instance-wide; the generated caller mapping is per child.\n"
+                      + "- Evidence: one or more required configured names were absent before provider preflight.\n\n"
+                      + "Fix location: run the matching provider configuration workflow in the instance, or regenerate this child caller if the contract is stale. Then rerun:\n\n"
                       + f"~~~bash\n{command}\n~~~\n\n"
-                      + "Review and commit the generated changes, push them, then rerun or await this PR workflow.\n"
+                      + "Review and commit the generated changes, push them, then rerun or await this child PR workflow. Gate 2 is proven when effective values resolve before provider preflight.\n"
                   )
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
                   summary.write(recovery)
@@ -204,14 +214,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          action="$PANOPTICON_INSTANCE_DIR/.github/actions/panopticon-aws-credentials/action.yml"
+          action="$PANOPTICON_INSTANCE_DIR/$PANOPTICON_CREDENTIAL_ACTION"
           if [ ! -f "$action" ]; then
             {
-              echo "## Bedrock instance-managed credential action is missing"
+              echo "## Panopticon gate 3 failed: caller identity and credentials"
               echo
-              echo "This mode requires \`$action\` in the instance repository. Add or restore that action, or choose \`github-oidc\`, then rerun this workflow."
+              echo "- Expected resource: \`$action\` in the instance repository"
+              echo "- Scope: instance-wide credential configuration; the child caller still owns its identity and permissions."
+              echo
+              echo "Recovery: add or restore that fixed action in the instance, or choose \`github-oidc\` in the instance provider configuration. Then regenerate the child caller if the contract changed and rerun this workflow."
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Bedrock instance-managed credentials require the instance action; see the step summary"
+            echo "::error::Panopticon gate 3: Bedrock instance-managed credentials require the fixed instance action; see the step summary"
             exit 1
           fi
 
@@ -224,6 +237,7 @@ jobs:
         run: python -m pip install --upgrade -r "$PANOPTICON_INSTANCE_DIR/requirements-bedrock.txt"
 
       - name: Configure AWS credentials through GitHub OIDC
+        id: github_credentials
         if: steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'github-oidc'
         uses: aws-actions/configure-aws-credentials@v6.1.2
         with:
@@ -231,8 +245,122 @@ jobs:
           aws-region: ${{ inputs.aws_region }}
 
       - name: Configure AWS credentials through the instance action
+        id: instance_credentials
         if: steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'instance-managed'
+        timeout-minutes: 1
         uses: ./.panopticon-instance/.github/actions/panopticon-aws-credentials
+
+      # Keep this recovery boundary in the caller. A timeout cancels the
+      # composite action's remaining internal steps, so an in-action failure
+      # reporter would disappear in the exact case it needs to explain.
+      - name: Report instance-managed credential failure
+        if: always() && steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'instance-managed' && steps.instance_credentials.outcome != 'success' && steps.instance_credentials.outcome != 'skipped'
+        shell: python
+        env:
+          INSTANCE: ${{ env.PANOPTICON_INSTANCE }}
+          CHILD_REPOSITORY: ${{ env.PANOPTICON_REPO }}
+        run: |
+          import os
+          import sys
+
+          sys.path.insert(0, os.environ["GITHUB_WORKSPACE"])
+          try:
+              from panopticon.recovery import credential_action_recovery
+          except ImportError:
+              example_url = (
+                  "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
+                  "docs/examples/panopticon-aws-credentials/action.yml"
+              )
+              action_path = os.environ["PANOPTICON_CREDENTIAL_ACTION"]
+              protected_paths_fragment = (
+                  '"protected_paths": [\n'
+                  f'    "{action_path}"\n'
+                  "  ]"
+              )
+              command = (
+                  "curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/"
+                  "panopticon-ay-eye/main/install.py | "
+                  f"PANOPTICON_INSTANCE='{os.environ['INSTANCE']}' python3"
+              )
+              recovery = "\n".join(
+                  [
+                      "## Panopticon gate 3 failed: caller identity and credentials",
+                      "",
+                      f"- Expected resource: `{action_path}` in the instance repository",
+                      f"- Caller repository: `{os.environ['CHILD_REPOSITORY']}`",
+                      "- Scope: credential registration is per child; the fixed action is instance-owned.",
+                      "",
+                      "Register this exact child repository in the organization's approved identity system, then copy the reviewed example:",
+                      f"{example_url}",
+                      f"to `{action_path}` and replace only the organization broker step.",
+                      "The broker must write `PANOPTICON_AWS_REGION` to `GITHUB_ENV`.",
+                      "A valid `instance-managed` contract automatically protects this fixed path during template sync. For other custom instance files, use:",
+                      "",
+                      "~~~json",
+                      protected_paths_fragment,
+                      "~~~",
+                      "Then verify the caller grants `id-token: write` where required and run:",
+                      "",
+                      "~~~bash",
+                      command,
+                      "~~~",
+                      "",
+                      "Review and commit the generated caller, push it, then rerun or await this child PR workflow.",
+                      "",
+                  ]
+              )
+          else:
+              recovery = credential_action_recovery(
+                  os.environ["INSTANCE"],
+                  os.environ["CHILD_REPOSITORY"],
+              )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(recovery)
+          print("::error::Panopticon gate 3: instance-managed credential setup failed or timed out; see the step summary")
+          raise SystemExit(1)
+
+      - name: Report GitHub OIDC credential failure
+        if: always() && steps.init.outputs.initialized == 'true' && inputs.credential_mode == 'github-oidc' && steps.github_credentials.outcome != 'success' && steps.github_credentials.outcome != 'skipped'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## Panopticon gate 3 failed: caller identity and credentials"
+            echo
+            echo "- Expected resource: the configured AWS role and region names for GitHub OIDC"
+            echo "- Caller repository: \`$PANOPTICON_REPO\`"
+            echo "- Scope: the OIDC trust and role registration are per child; provider names and caller permissions are instance/provider configuration."
+            echo
+            echo "Recovery: verify the generated caller grants \`id-token: write\`, register this exact child repository in the organization's approved identity system, and confirm the configured role trusts the child's OIDC subject. Then rerun or await this child PR workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Panopticon gate 3: GitHub OIDC credential setup failed; see the step summary"
+          exit 1
+
+      - name: Verify caller cloud identity
+        if: steps.init.outputs.initialized == 'true' && (inputs.credential_mode == 'github-oidc' || steps.instance_credentials.outcome == 'success')
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity_file=$(mktemp)
+          trap 'rm -f "$identity_file"' EXIT
+          if ! aws sts get-caller-identity --output json > "$identity_file"; then
+            {
+              echo "## Panopticon gate 3 failed: caller identity and credentials"
+              echo
+              echo "- Expected resource: usable cloud credentials for caller repository \`$PANOPTICON_REPO\`"
+              echo "- Scope: per-child identity and credential provisioning"
+              echo "- Evidence: \`aws sts get-caller-identity\` could not verify the credentials supplied by the selected Bedrock mode."
+              echo
+              echo "Recovery: repair the child caller permission or its organization identity registration, then rerun this workflow. Do not change provider request code until this identity check succeeds."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Panopticon gate 3: caller cloud identity could not be verified; see the step summary"
+            exit 1
+          fi
+          {
+            echo "## Panopticon gate 3 passed: caller identity and credentials"
+            echo
+            echo "Caller repository \`$PANOPTICON_REPO\` supplied a usable cloud identity. Provider preflight is the next gate."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validate instance provider defaults action
         if: steps.init.outputs.initialized == 'true'
@@ -242,9 +370,11 @@ jobs:
           action="$PANOPTICON_INSTANCE_DIR/.github/actions/panopticon-provider-defaults/action.yml"
           if [ ! -f "$action" ]; then
             {
-              echo "## Panopticon provider defaults action is missing"
+              echo "## Panopticon gate 2 failed: effective provider configuration"
               echo
-              echo "Restore the fixed instance action at \`$action\`, then rerun this workflow."
+              echo "- Expected resource: \`$action\`"
+              echo "- Scope: instance-wide provider defaults"
+              echo "- Fix location: restore the fixed instance action, then rerun this workflow."
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::error::Panopticon provider defaults action is missing; see the step summary"
             exit 1
@@ -282,16 +412,17 @@ jobs:
           import sys
           sys.path.insert(0, str(root))
 
+          # The checkout is at workflow_ref, so its callers.py is the renderer paired with this workflow.
           from panopticon.config import load_org_config, provider_contract
 
-          actual = provider_contract(load_org_config(root))["revision"]
+          actual = provider_contract(load_org_config(root))
           expected = os.environ["EXPECTED_REVISION"]
-          if actual != expected:
+          if expected not in {actual["caller_revision"], actual["legacy_revision"]}:
               from panopticon.recovery import stale_caller_recovery
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
                   summary.write(stale_caller_recovery(os.environ["INSTANCE"]))
               raise SystemExit(
-                  "::error::Panopticon provider configuration revision changed; "
+                  "::error::Panopticon caller compatibility revision changed; "
                   "see the step summary for the exact child-bootstrap command"
               )
 
@@ -344,12 +475,8 @@ jobs:
       - name: Doc-drift check
         id: drift
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e
@@ -373,12 +500,8 @@ jobs:
       - name: Index-currency check
         id: currency
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e
@@ -459,12 +582,8 @@ jobs:
       - name: Interface candidate analysis (advisory)
         id: matching
         if: steps.init.outputs.initialized == 'true'
+        # Effective values are inherited from the resolver's GITHUB_ENV writes.
         shell: bash
-        env:
-          PANOPTICON_LLM_MODEL: ${{ inputs.model }}
-          PANOPTICON_LLM_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds || '90' }}
-          PANOPTICON_LLM_MAX_ATTEMPTS: ${{ inputs.max_attempts || '2' }}
-          PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts || '2' }}
         run: |
           set -euo pipefail
           set +e
