@@ -340,6 +340,7 @@ class TestDefaultInstancePayload(unittest.TestCase):
     )
     FAKE_PROVIDERS = (
         "class ProviderConfigError(Exception):\n    pass\n"
+        "INSTANCE_CREDENTIAL_ACTION = 'action.yml'\n"
         "PROVIDERS = {'test': {}}\n"
         "def resolve_provider_contract(config):\n    return config\n"
     )
@@ -402,7 +403,7 @@ class TestDefaultInstancePayload(unittest.TestCase):
     def test_current_bootstrap_loads_without_a_python_tooling_manifest(self):
         source_by_path = {
             "panopticon/__init__.py": self.FAKE_INIT,
-            "panopticon/recovery.py": self.FAKE_RECOVERY,
+            "panopticon/recovery.py": (REPO_ROOT / "panopticon" / "recovery.py").read_text(),
             "panopticon/providers.py": self.FAKE_PROVIDERS,
             "panopticon/callers.py": self.FAKE_CALLERS,
             "panopticon/bootstrap.py": (REPO_ROOT / "panopticon" / "bootstrap.py").read_text(),

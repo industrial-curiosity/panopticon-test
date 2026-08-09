@@ -90,6 +90,11 @@ Load, validate, and render the caller before writing any managed sync resource;
 reuse that validated render for the write so renderer failures remain controlled
 and cannot occur after partial sync.
 
+When fetched Python modules execute inside a synthetic package with no filesystem
+fallback, register direct dependencies in topological order before evaluating
+modules that import them at module scope. Regression fixtures must use the real
+module source for those imports; dependency-free fakes can hide ordering bugs.
+
 ## Sync and auth model
 
 - Child repos **push** to the instance repo: on merge to main, docs are copied

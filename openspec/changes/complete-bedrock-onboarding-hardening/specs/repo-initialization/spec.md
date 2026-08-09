@@ -2,6 +2,33 @@
 
 ## MODIFIED Requirements
 
+### Requirement: Default bootstrap payload loads its import dependencies
+
+The default payload loader SHALL register `panopticon.providers` before
+executing any fetched module that imports it, including
+`panopticon.recovery`, and SHALL load the modules in dependency order before
+executing `panopticon.bootstrap`. The modules SHALL be loaded through the
+existing validated, authenticated GitHub-contents path into the in-memory
+`panopticon` package; the loader SHALL not require installation to disk or a
+`PYTHONPATH` change.
+
+#### Scenario: Real recovery module imports the provider registry
+
+- **GIVEN** an uncustomized instance installer delegates to the template's
+  bootstrap payload and the fetched recovery module imports
+  `INSTANCE_CREDENTIAL_ACTION` from `panopticon.providers`
+- **WHEN** the public launcher loads the default payload
+- **THEN** it registers `panopticon.providers` before evaluating
+  `panopticon.recovery`, and the bootstrap begins without a
+  `ModuleNotFoundError`
+
+#### Scenario: Provider registry retrieval is invalid
+
+- **GIVEN** the default bootstrap requires `panopticon.providers`
+- **WHEN** the GitHub contents API returns an invalid provider-module payload
+- **THEN** the launcher fails with its controlled invalid-payload error before
+  executing the recovery or bootstrap modules
+
 ### Requirement: Bootstrap caller-renderer failures are contained before writes
 
 The bootstrap installer SHALL load the caller renderer from the effective
