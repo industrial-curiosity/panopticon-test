@@ -1,9 +1,10 @@
 """Shared, copy/paste-safe recovery text for provider configuration failures."""
 
+from .providers import INSTANCE_CREDENTIAL_ACTION
+
 PUBLIC_INSTALLER_URL = (
     "https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-eye/main/install.py"
 )
-INSTANCE_CREDENTIAL_ACTION = ".github/actions/panopticon-aws-credentials/action.yml"
 PUBLIC_CREDENTIAL_ACTION_EXAMPLE_URL = (
     "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
     "docs/examples/panopticon-aws-credentials/action.yml"

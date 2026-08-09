@@ -115,6 +115,14 @@ class TestProviderWorkflows(unittest.TestCase):
         ):
             self.assertIn(marker, text)
 
+    def test_bedrock_recovery_fallback_uses_one_workflow_path_binding(self):
+        text = self.workflow("panopticon-pr-bedrock.yml")
+        path = ".github/actions/panopticon-aws-credentials/action.yml"
+        self.assertIn(f"PANOPTICON_CREDENTIAL_ACTION: {path}", text)
+        self.assertIn('action_path = os.environ["PANOPTICON_CREDENTIAL_ACTION"]', text)
+        self.assertIn('action="$PANOPTICON_INSTANCE_DIR/$PANOPTICON_CREDENTIAL_ACTION"', text)
+        self.assertNotIn(f'action_path = "{path}"', text)
+
     def test_public_credential_action_example_is_placeholder_safe(self):
         example = (ROOT / "docs" / "examples" / "panopticon-aws-credentials" / "action.yml").read_text(encoding="utf-8")
         for marker in (

@@ -15,8 +15,9 @@
 ## 2. Credential-action example and recovery
 
 - [x] 2.1 Add `docs/examples/panopticon-aws-credentials/action.yml` with the fixed composite-action shape, placeholder organization broker step, and documented region-output contract.
-- [x] 2.2 Extend shared credential recovery and the Bedrock workflow fallback with the example URL, fixed destination path, copyable `protected_paths` fragment, child-bootstrap command, and automatic-protection note.
-- [x] 2.3 Add recovery and public-safety tests covering formatter output, inline fallback markers, example content, and absence of organization-specific identifiers or credential values.
+- [x] 2.2 Extend shared credential recovery and the Bedrock workflow fallback with the example URL, fixed destination path, copyable `protected_paths` fragment, child-bootstrap command, and automatic-protection note, using the canonical fixed action path binding.
+- [x] 2.3 Add recovery and public-safety tests covering formatter output, inline fallback markers, example content, absence of organization-specific identifiers or credential values, and canonical path binding.
+- [x] 2.4 Update the Bedrock workflow and shared recovery code so the provider registry is the canonical Python path source and the workflow fallback uses one workflow-level path binding.
 
 ## 3. Automatic template-sync protection
 

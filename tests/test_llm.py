@@ -2,10 +2,10 @@
 
 import json
 import tempfile
-import threading
 import unittest
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 from panopticon.llm import (
     API_KEY_VAR,
@@ -30,50 +30,36 @@ from panopticon.skills import SkillNotFoundError, load_skill, strip_frontmatter
 
 
 class StubLLMServer:
-    """In-process /chat/completions endpoint with a scriptable response queue."""
+    """In-memory /chat/completions transport with a scriptable response queue."""
 
     def __init__(self):
         self.requests = []
         self.responses = []  # queue of (status, body_dict_or_str); last one repeats
-        stub = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_POST(self):
-                length = int(self.headers.get("Content-Length", 0))
-                stub.requests.append(
-                    {
-                        "path": self.path,
-                        "authorization": self.headers.get("Authorization"),
-                        "content_type": self.headers.get("Content-Type"),
-                        "body": json.loads(self.rfile.read(length)),
-                    }
-                )
-                status, body = stub.responses[min(len(stub.requests), len(stub.responses)) - 1]
-                payload = (body if isinstance(body, str) else json.dumps(body)).encode("utf-8")
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-            def log_message(self, *args):
-                pass
-
-        self.server = HTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self):
-        self.thread.start()
         return self
 
     def __exit__(self, *exc):
-        self.server.shutdown()
-        self.server.server_close()
+        return None
+
+    def urlopen(self, request, timeout=30):
+        self.requests.append(
+            {
+                "path": request.full_url.removeprefix("http://stub.test"),
+                "authorization": request.headers.get("Authorization"),
+                "content_type": request.headers.get("Content-type"),
+                "body": json.loads(request.data),
+            }
+        )
+        status, body = self.responses[min(len(self.requests), len(self.responses)) - 1]
+        payload = (body if isinstance(body, str) else json.dumps(body)).encode("utf-8")
+        if status >= 400:
+            raise HTTPError(request.full_url, status, "failure", {}, BytesIO(payload))
+        return BytesIO(payload)
 
     @property
     def endpoint(self):
-        host, port = self.server.server_address
-        return f"http://{host}:{port}/v1"
+        return "http://stub.test/v1"
 
 
 def completion(content):
@@ -82,6 +68,7 @@ def completion(content):
 
 def client_for(stub, **kwargs):
     kwargs.setdefault("sleep", lambda seconds: None)
+    kwargs.setdefault("urlopen", stub.urlopen)
     return LLMClient(stub.endpoint, api_key="test-key", model="test-model", **kwargs)
 
 
@@ -157,9 +144,11 @@ class TestRetries(unittest.TestCase):
         self.assertEqual(len(stub.requests), 1)
 
     def test_unreachable_endpoint_fails_loudly(self):
-        client = LLMClient(
-            "http://127.0.0.1:1/v1", api_key="k", max_attempts=2, timeout=1, sleep=lambda s: None
-        )
+        def urlopen(*args, **kwargs):
+            raise URLError("connection refused")
+
+        client = LLMClient("http://stub.test/v1", api_key="k", max_attempts=2,
+                           timeout=1, sleep=lambda s: None, urlopen=urlopen)
         with self.assertRaises(LLMRequestError) as ctx:
             client.chat([{"role": "user", "content": "hi"}])
         self.assertIn("connection failed", str(ctx.exception))
@@ -328,7 +317,7 @@ class TestCompleteJson(unittest.TestCase):
             stub.responses = [(200, completion("never valid json"))]
             client = LLMClient.from_env(env={
                 ENDPOINT_VAR: stub.endpoint, API_KEY_VAR: "test-key", MAX_CORRECTION_ATTEMPTS_VAR: "0",
-            }, sleep=lambda seconds: None)
+            }, sleep=lambda seconds: None, urlopen=stub.urlopen)
             with self.assertRaises(LLMResponseError):
                 client.complete_json(
                     "skill text", "user content", _validate_stale_shape, response_label="drift verdict",

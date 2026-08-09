@@ -2,6 +2,26 @@
 
 ## ADDED Requirements
 
+### Requirement: Fixed credential-action path has one canonical binding per runtime boundary
+
+The Bedrock provider contract SHALL own the fixed instance-managed credential-action path,
+shared recovery formatters SHALL reuse that provider-owned value, and the reusable workflow's
+inline recovery fallback SHALL reuse the workflow-level binding for the same path. These bindings
+SHALL remain fixed and SHALL NOT be configurable through provider or child-repository input.
+
+#### Scenario: Provider and recovery use the same fixed path
+
+- **WHEN** the Bedrock provider contract or shared credential recovery renders the
+  instance-managed action path
+- **THEN** both outputs identify `.github/actions/panopticon-aws-credentials/action.yml`
+  from the provider-owned binding without declaring a second Python copy
+
+#### Scenario: Workflow fallback uses its fixed path binding
+
+- **WHEN** the Bedrock caller-side recovery formatter cannot be imported
+- **THEN** the inline fallback identifies the same fixed action path through the workflow-level
+  binding and does not introduce a separate local path declaration or configurable override
+
 ### Requirement: Missing instance-managed credential recovery is copyable
 
 The Bedrock provider workflow SHALL, when `instance-managed` credential

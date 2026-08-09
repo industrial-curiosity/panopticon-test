@@ -88,6 +88,7 @@ jobs:
       pull-requests: write
     env:
       PANOPTICON_INSTANCE_DIR: .panopticon-instance
+      PANOPTICON_CREDENTIAL_ACTION: .github/actions/panopticon-aws-credentials/action.yml
       # The child repo's own panopticon/ (vendored local-tooling subset — see
       # bootstrap.py's LOCAL_TOOLING_MODULES) shares its package name with the instance repo's
       # full copy on PYTHONPATH below. Without this, `python3 -m`/`-c` prepend the checkout's cwd
@@ -213,7 +214,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          action="$PANOPTICON_INSTANCE_DIR/.github/actions/panopticon-aws-credentials/action.yml"
+          action="$PANOPTICON_INSTANCE_DIR/$PANOPTICON_CREDENTIAL_ACTION"
           if [ ! -f "$action" ]; then
             {
               echo "## Panopticon gate 3 failed: caller identity and credentials"
@@ -270,7 +271,7 @@ jobs:
                   "https://github.com/industrial-curiosity/panopticon-ay-eye/blob/main/"
                   "docs/examples/panopticon-aws-credentials/action.yml"
               )
-              action_path = ".github/actions/panopticon-aws-credentials/action.yml"
+              action_path = os.environ["PANOPTICON_CREDENTIAL_ACTION"]
               protected_paths_fragment = (
                   '"protected_paths": [\n'
                   f'    "{action_path}"\n'
@@ -285,7 +286,7 @@ jobs:
                   [
                       "## Panopticon gate 3 failed: caller identity and credentials",
                       "",
-                      "- Expected resource: `.github/actions/panopticon-aws-credentials/action.yml` in the instance repository",
+                      f"- Expected resource: `{action_path}` in the instance repository",
                       f"- Caller repository: `{os.environ['CHILD_REPOSITORY']}`",
                       "- Scope: credential registration is per child; the fixed action is instance-owned.",
                       "",

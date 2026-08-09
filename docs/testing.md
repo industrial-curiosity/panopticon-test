@@ -163,8 +163,8 @@ The onboarding-hardening change is covered by focused standard-library tests:
 
 - `tests/test_config.py` verifies Bedrock model optionality, explicit Actions-name mapping, organization-variable precedence, instance-default fallback, source-safe unresolved-model failure, optional prerequisite reporting, caller revision changes, and legacy fingerprints that preserve pre-change job-timeout defaults while dropping only the newly introduced Bedrock model default.
 - `tests/test_configure_instance.py` verifies `model_default` persists only as the non-secret `llm.defaults.model` field and that the CLI rejects the option for non-Bedrock providers with no write.
-- `tests/test_recovery.py` verifies the public example URL, fixed action path, copyable `protected_paths` fragment, child-bootstrap command, automatic-protection note, and credential-free recovery text.
-- `tests/test_provider_workflows.py` verifies the Bedrock dispatch/action wiring, inline recovery fallback markers, and public placeholder safety for the credential-action example.
+- `tests/test_recovery.py` verifies the public example URL, provider-owned fixed action path, copyable `protected_paths` fragment, child-bootstrap command, automatic-protection note, and credential-free recovery text.
+- `tests/test_provider_workflows.py` verifies the Bedrock dispatch/action wiring, one workflow-level fixed-path binding for inline recovery, fallback markers, and public placeholder safety for the credential-action example.
 - `tests/test_sync_from_template.py` verifies provider-derived runtime attributes and real Git merges for routine and first-time sync paths.
 
 Run the focused set with:

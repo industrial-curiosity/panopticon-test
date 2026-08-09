@@ -45,6 +45,17 @@ credential values must remain instance-owned.
 
 ## Decisions
 
+### Keep the fixed credential-action path canonical at each runtime boundary
+
+The provider registry remains the canonical Python owner of the fixed
+instance-managed credential-action path. Recovery formatters import that value
+instead of redeclaring it. The reusable workflow keeps one workflow-level
+binding for its self-contained import fallback; shell validation reads that
+binding, while the local-action invocation remains the literal GitHub Actions
+step path required by the workflow syntax. This removes drift between Python
+formatters and the fallback's local variable without making the path
+configurable.
+
 ### Ship a public example at the fixed action path's documented source
 
 Add `docs/examples/panopticon-aws-credentials/action.yml` as the canonical

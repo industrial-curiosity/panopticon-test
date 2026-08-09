@@ -2,6 +2,7 @@
 
 import unittest
 
+from panopticon.providers import INSTANCE_CREDENTIAL_ACTION
 from panopticon.recovery import (
     child_bootstrap_command,
     configuration_recovery,
@@ -147,6 +148,10 @@ class TestRecoveryOutput(unittest.TestCase):
         self.assertIn("`.github/actions/custom-credentials/action.yml`", text)
         self.assertNotIn("secret_value", text)
         self.assertNotIn("access_key", text)
+
+    def test_recovery_reuses_provider_owned_fixed_action_path(self):
+        self.assertEqual(INSTANCE_CREDENTIAL_ACTION, ".github/actions/panopticon-aws-credentials/action.yml")
+        self.assertIn(INSTANCE_CREDENTIAL_ACTION, credential_action_recovery("acme/instance", "acme/child"))
 
 
 if __name__ == "__main__":

@@ -46,6 +46,11 @@ simple as possible.
   implementation as the default (e.g., `def fetch(url, urlopen=urllib.request.urlopen)`).
   Tests inject a mock; production callers pass nothing. Never patch at the module
   level when injection is possible.
+- **Hermetic tests.** The standard test suite SHALL run without network access,
+  DNS, GitHub API credentials, or TCP/UDP socket binding. Inject URL/API
+  transports and use in-memory response fakes for HTTP behavior, including
+  success, retry, timeout, and failure cases. Do not make a test pass by
+  skipping it when the environment lacks network or socket access.
 - **Initialization flag last.** `panopticon/config.json` (and any equivalent
   completion sentinel) must be the absolute last artifact written, only after all
   validation passes. If validation fails, the flag must not exist. Tests that check
