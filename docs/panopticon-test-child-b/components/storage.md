@@ -2,33 +2,21 @@
 
 ## Responsibility
 
-Owns storage of order attachments (e.g. receipts, uploads) in S3: upload, generate a
-time-limited signed URL, and delete. Out of scope: nothing in this repo currently calls
-`uploadAttachment`, `getAttachmentUrl`, or `deleteAttachment` — no route handler wires this in.
+The storage component declares the `order-attachments-bucket` S3 bucket in `infra/s3-buckets.yaml` and manages order attachment objects in it: uploading objects, producing signed read URLs, and deleting objects by key.
 
 ## Interfaces
 
-- Owns `order-attachments-bucket` (`s3`), extracted by the LLM fallback pass. Declared in
-  `infra/s3-buckets.yaml` (carrying the `# panopticon-interface order-attachments-bucket` hint)
-  and referenced again by `src/storage/attachments.ts` via the `ORDER_ATTACHMENTS_BUCKET`
-  environment variable, matching the same hinted bucket. Both files are recorded as producer and
-  consumer evidence — `attachments.ts` both writes (`uploadAttachment`) and reads/deletes
-  (`getAttachmentUrl`, `deleteAttachment`) objects in the bucket. See
-  [interfaces.md](../interfaces.md).
+This component owns and both produces and consumes `order-attachments-bucket` (S3): `infra/s3-buckets.yaml` declares the bucket and `src/storage/attachments.ts` uses it. See [interfaces.md](../interfaces.md) for the indexed source files.
 
 ## Key modules
 
-- `src/storage/attachments.ts` — `uploadAttachment(orderId, fileName, body, contentType)` (key
-  pattern `orders/{orderId}/{fileName}`), `getAttachmentUrl(key, expiresIn = 3600)` (signed URL
-  via `@aws-sdk/s3-request-presigner`), `deleteAttachment(key)`. Wraps `@aws-sdk/client-s3`.
+- `infra/s3-buckets.yaml` — bucket declaration with versioning and lifecycle settings.
+- `src/storage/attachments.ts` — `uploadAttachment`, `getAttachmentUrl`, and `deleteAttachment` via the S3 SDK and request presigner.
 
 ## Configuration
 
-- `ORDER_ATTACHMENTS_BUCKET` — required (non-null-asserted); the S3 bucket name.
-- `AWS_REGION` — defaults to `us-east-1` when unset.
+`ORDER_ATTACHMENTS_BUCKET` is required. `AWS_REGION` selects the S3 region and defaults to `us-east-1`.
 
 ## Failure modes
 
-None of the three functions catch or wrap S3 client errors — an `S3Client.send` failure (e.g.
-missing bucket, permission denial, network error) propagates directly to the caller as whatever
-error the AWS SDK throws. `uploadAttachment` and `deleteAttachment` have no retry logic.
+S3 client errors reject the attachment operations. Missing bucket or region configuration prevents operations from targeting the intended storage location. Signed URLs default to a one-hour expiry when no explicit lifetime is supplied.

@@ -48,7 +48,6 @@
     "order-events": [
       {
         "consumer": [],
-        "extracted_by": "llm",
         "owner": {
           "component": "events",
           "repo": "panopticon-test-child-b"
@@ -79,7 +78,7 @@
         ],
         "extracted_by": "llm",
         "owner": {
-          "component": "worker",
+          "component": "queue",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -97,7 +96,6 @@
     "orders-api": [
       {
         "consumer": [],
-        "extracted_by": "llm",
         "owner": {
           "component": "api",
           "repo": "panopticon-test-child-b"

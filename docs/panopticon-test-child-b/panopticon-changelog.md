@@ -1,63 +1,18 @@
-# Panopticon changelog
+# Panopticon documentation changelog
 
-## 2026-07-10 — doc regeneration after `infra/` addition
+## 2026-07-26
 
-**Found:** `panopticon/index.json` and all four doc layers were generated before the `add infra`
-commit added `infra/s3-buckets.yaml`, `infra/services.yaml`, and `infra/sqs-queues.yaml` — each
-already carrying `# panopticon-interface <name>` hints. The index still had only the two
-deterministic-parser interfaces (`orders-api`, `order-events`), and `docs/architecture.md`,
-`docs/operations.md`, and `docs/components/{worker,storage,clients}.md` all asserted (now
-incorrectly) that the SQS queue, S3 bucket, and external service dependencies had no config file a
-parser or LLM-fallback pass could extract from.
+- `README.md`: removed nonexistent-file references and clarified that the repository has no visible application bootstrap.
+- `docs/architecture.md`: replaced unsupported component-to-component flows with the relationships actually evidenced by the source modules.
+- `docs/components/queue.md` and `docs/components/storage.md`: removed nonexistent infrastructure-file references and corrected the unproven ownership claims.
+- `docs/components/clients.md`: aligned configuration and failure-mode wording with the TypeScript client implementations.
+- `ts-order-service.md`: replaced obsolete fixture claims about absent infrastructure and sibling repositories with the checked-in interface evidence.
 
-**Resolved:** ran LLM-fallback extraction over the three `infra/*.yaml` files, honoring their
-existing hints, and added five interfaces to `panopticon/index.json`:
-`order-attachments-bucket` (s3, owner component `storage`), `order-processing-queue` (sqs, owner
-component `worker`), and `inventory-api` / `stripe-payments` / `shipping-provider-api` (rest,
-`owner: null` — external). Re-rendered `docs/interfaces.md` from the updated index and revised the
-architecture, operations, and affected component docs to describe the now-indexed interfaces
-instead of claiming they weren't extractable.
+## 2026-08-09
 
-**Judgment call:** the repo's own `ts-order-service.md` fixture doc illustrates this same
-extraction with the SQS-owning component named `queue`; this run instead used `worker`, the
-component name already established by the real `docs/components/worker.md` (which documents the
-same `src/queue/*.ts` files), to avoid introducing a second, docless component for the same source.
-If `queue` was actually intended, rename the component in the index and split/rename the doc
-accordingly.
-
-## 2026-07-12 — extended LLM-fallback extraction to `.ts` files; fixture doc updated to match
-
-**Found:** none of the `.ts` source files (`src/clients/*.ts`, `src/api/routes/*.ts`,
-`src/queue/*.ts`, `src/storage/attachments.ts`, `src/events/producer.ts`) appeared as
-`source_files` anywhere in `panopticon/index.json`, even though each one clearly references an
-already-indexed interface — by a shared environment-variable name with the corresponding
-`infra/*.yaml` config (`INVENTORY_API_URL`, `SHIPPING_API_URL`, `ORDER_PROCESSING_QUEUE_URL`,
-`ORDER_ATTACHMENTS_BUCKET`), by topic/route identity for the two deterministic-parser interfaces,
-or by SDK identity for Stripe. Two webhook-receiving routes in `src/api/routes/webhooks.ts`
-(`POST /stripe`, `POST /shipping`) were not represented in the index at all. Separately,
-`order-events` and `orders-api` had `owner.component` set to the repo name itself
-(`panopticon-test-child-b`) rather than their real owning components. The repo's own
-`ts-order-service.md` fixture doc asserted this omission was by design (*"`.ts` source files are
-not in the LLM fallback suffix set"*) and showed the repo-name component fallback as expected
-parser behavior — directly contradicting what the evidence in the `.ts` files supported.
-
-**Resolved:** confirmed with the user that the actual repo/index state, not the fixture doc, is
-ground truth going forward. Added the `.ts` files as producer/consumer evidence on their matching
-existing interfaces, added two new `webhook`-type entries (`stripe-payments`,
-`shipping-provider-api`) owned by `api` for the webhook receivers, added
-`# panopticon-interface` hints above each route in `webhooks.ts`, corrected `order-events` and
-`orders-api` `owner.component` to `events` and `api`, re-rendered `docs/interfaces.md`, and revised
-`docs/architecture.md` (including adding the previously-missing `## Architecture diagram` section
-required by `panopticon.docs.validate_docs`) and the `api`/`clients`/`events`/`storage`/`worker`
-component docs to describe the current index instead of the old "no name a parser or LLM pass can
-extract" claim. Rewrote `ts-order-service.md` in full to match: `.ts` evidence is now documented as
-included, both webhook entries are documented, and the expected `panopticon/index.json` block was
-updated to the real current index.
-
-**Judgment call:** this reverses the previous run's implicit design constraint (also reflected in
-`ts-order-service.md`) that `.ts` files carry no extractable interface evidence. The correlation
-used to justify extraction — an exact shared environment-variable name, or, for Stripe, SDK
-identity — is concrete rather than inferred, so this is treated as a legitimate extension of
-extraction coverage rather than a guess. If a future run wants to restore the `.ts`-exclusion
-design, both the index entries added here and this fixture doc's description of them need to be
-reverted together.
+- `README.md`: the repository-structure tree omitted `infra/`; added the `infra/` declarations for the consumed services, S3 bucket, and SQS queue.
+- `ts-order-service.md`: claimed the repository contains no `infra/` directory and that the S3/SQS resources have no declared ownership; `infra/` has been tracked since the initial commit and declares both resources, so the fixture description was corrected and the ownership sentence updated.
+- `docs/components/queue.md` and `docs/components/storage.md`: the previous pass stripped the ownership claims for `order-processing-queue` and `order-attachments-bucket` as "unproven", but `infra/sqs-queues.yaml` and `infra/s3-buckets.yaml` (tracked since the initial commit) declare both resources and the instance shard records this repo as their owner; restored ownership and added the infra files to the key-module lists.
+- `docs/components/api.md`: the webhook receivers in `src/api/routes/webhooks.ts` were described but not indexed; they produce the `stripe-payments` and `shipping-provider-api` webhook interfaces owned by the api component, and `panopticon-interface` hints were added to that file.
+- `docs/interfaces.md`: regenerated from the updated local index, which now includes the webhook producers, the `infra/*.yaml` source files, and the storage/queue ownership of the S3 bucket and SQS queue.
+- `panopticon/index.json`: reconciled with the instance's compiled interface index — added the `stripe-payments` and `shipping-provider-api` webhook producers, the `infra/*.yaml` source files, and ownership of `order-attachments-bucket` (storage) and `order-processing-queue` (queue).

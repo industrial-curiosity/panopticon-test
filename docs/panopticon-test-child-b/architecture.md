@@ -2,96 +2,44 @@
 
 ## Purpose
 
-`panopticon-test-child-b` is a TypeScript order-management codebase: order CRUD, an order-events
-Kafka topic, an SQS-backed job queue for order processing, S3 storage for order attachments, and
-REST clients for an inventory service, Stripe, and a shipping provider. Per `ts-order-service.md`,
-this repo also serves as a Panopticon test fixture — its structure exists to exercise deterministic
-parsers (REST/OpenAPI, Kafka) and LLM-fallback extraction against a real TypeScript layout.
+This repository contains TypeScript modules for an Orders REST API contract, order-lifecycle event publication, SQS-backed order-job processing, S3 attachment storage, and integrations with inventory, Stripe, and shipping services. `infra/` YAML files declare the SQS queue, S3 bucket, and consumed services that the modules use.
+
+The checked-in code does not include an application bootstrap that mounts the route modules or coordinates these modules into an order-processing workflow. `package.json` references `src/index.ts`, which does not exist in the repository, so the OpenAPI specification and route handlers define the visible API contract only.
 
 ## Components
 
-- [api](components/api.md) — HTTP route handlers and the OpenAPI spec for order management, plus
-  Stripe/shipping webhook receivers
-- [events](components/events.md) — Kafka producer for order lifecycle events
-- [worker](components/worker.md) — long-running SQS consumer that processes order jobs
-- [clients](components/clients.md) — outbound REST clients to inventory, Stripe, and shipping
-- [storage](components/storage.md) — S3-backed order attachment storage
+- [api](components/api.md) — defines the Orders REST contract, route handlers, and webhook receivers.
+- [clients](components/clients.md) — calls inventory, Stripe, and shipping providers.
+- [events](components/events.md) — declares and publishes order lifecycle events.
+- [queue](components/queue.md) — declares the order-processing queue, enqueues jobs, and long-polls them.
+- [storage](components/storage.md) — declares the attachments bucket and manages order attachments in it.
 
 ## Architecture diagram
 
 ```mermaid
 flowchart LR
-  callers([external callers]) -->|orders-api REST| api[api]
-
-  stripeExt[[Stripe]] -->|"webhook: POST /stripe"| api
-  shipExt[[Shipping provider]] -->|"webhook: POST /shipping"| api
-
-  clients[clients] -->|consumes inventory-api| invExt[[Inventory service]]
-  clients -->|consumes stripe-payments| stripeExt
-  clients -->|consumes shipping-provider-api| shipExt
-
-  events[events] -->|produces order-events| kafka[(Kafka)]
-
-  worker[worker] <-->|order-processing-queue| sqs[(SQS)]
-
-  storage[storage] <-->|order-attachments-bucket| s3[(S3 bucket)]
+  API[api] -->|defines| OrdersAPI[orders-api]
+  API -->|receives webhooks| StripeWH[stripe-payments webhook]
+  API -->|receives webhooks| ShippingWH[shipping-provider-api webhook]
+  Clients[clients] -->|calls| InventoryAPI[inventory-api]
+  Clients -->|calls| StripeREST[stripe-payments]
+  Clients -->|calls| ShippingREST[shipping-provider-api]
+  Events[events] -->|publishes| OrderEvents[order-events]
+  Queue[queue] -->|enqueues and processes| OrderQueue[order-processing-queue]
+  Storage[storage] -->|stores and retrieves| Attachments[order-attachments-bucket]
 ```
 
-[org diagram](../architecture.md#panopticon-test-child-b)
+[Panopticon analysis scope](operations.md#panopticon-analysis-scope)
+[org diagram](https://github.com/industrial-curiosity/panopticon-test/blob/main/docs/architecture.md#panopticon-test-child-b)
 
 ## Data flow
 
-The five components are not wired to each other in code (as the diagram above shows) — each one
-only connects to the external interface(s) it produces or consumes. `worker` and `storage` both
-write and read their respective queue/bucket; `api` is both a producer to external callers
-(`orders-api`) and a receiver of inbound webhook calls from Stripe and the shipping provider
-(`src/api/routes/webhooks.ts`).
+The `api` component defines the `orders-api` REST contract in `src/api/openapi.yaml` and its route handlers in `src/api/routes/orders.ts`, and receives inbound webhooks through `src/api/routes/webhooks.ts` (the `stripe-payments` and `shipping-provider-api` webhook interfaces). There is no bootstrap that mounts these routes.
 
-The modules above are not wired together in code: `package.json` declares a `dev` script
-(`ts-node src/index.ts`) and a `main` entry (`dist/index.js`) that would presumably assemble the
-Express app and mount `src/api/routes/*`, but `src/index.ts` does not exist anywhere in the repo
-or its git history, and no other file imports `src/clients/*`, `src/events/producer.ts`, or
-`src/storage/attachments.ts`. `src/api/routes/orders.ts` and `webhooks.ts` currently return
-hardcoded/stub responses and do not call any of those modules either.
+The `clients` component calls the `inventory-api`, `stripe-payments`, and `shipping-provider-api` REST services using base URLs from environment variables. The `events` component publishes order lifecycle events to the `order-events` Kafka topic via `publishOrderEvent`. The `queue` component sends order jobs to `order-processing-queue` with `enqueueOrder`; `src/queue/worker.ts` long-polls the queue with `receiveOrders`, processes jobs, and deletes handled messages. The `storage` component uploads, presigns, and deletes objects in `order-attachments-bucket`.
 
-The one real wiring that does exist: `src/queue/worker.ts` imports `receiveOrders` and
-`deleteMessage` from `src/queue/processor.ts` and runs a long-poll loop that logs each job action
-(`process`, `fulfill`, `cancel`) without calling the inventory, Stripe, shipping, events, or
-storage modules.
-
-Each module's intended role, as declared by its own code:
-
-1. `api` exposes `orders-api` (`GET/POST /orders`, `GET/PATCH /orders/:id`,
-   `POST /orders/:id/cancel`) per `src/api/openapi.yaml`, and hosts webhook receivers
-   (`POST /stripe`, `POST /shipping`) for the `stripe-payments` and `shipping-provider-api`
-   interfaces that `clients` consumes on the outbound side.
-2. `events` publishes to the `order-events` Kafka topic via `publishOrderEvent`.
-3. `worker` long-polls an SQS queue (`ORDER_PROCESSING_QUEUE_URL`) for `OrderJob` messages and
-   processes them.
-4. `clients` and `storage` expose reusable functions (inventory checks/reservations, payment
-   intents, shipping quotes/shipments, S3 attachment upload/URL/delete) that no current caller
-   invokes.
+The source does not orchestrate these components into a single order-processing workflow; each module is self-contained.
 
 ## Dependencies
 
-- **Kafka** (`KAFKA_BROKERS`) — required to publish to `order-events`; see
-  [interfaces.md](interfaces.md).
-- **AWS SQS** (`ORDER_PROCESSING_QUEUE_URL`, `AWS_REGION`) — the `worker` component's job queue,
-  declared in `infra/sqs-queues.yaml` and indexed as `order-processing-queue`; see
-  [interfaces.md](interfaces.md) and [components/worker.md](components/worker.md).
-- **AWS S3** (`ORDER_ATTACHMENTS_BUCKET`, `AWS_REGION`) — attachment storage used by `storage`,
-  declared in `infra/s3-buckets.yaml` and indexed as `order-attachments-bucket`; see
-  [interfaces.md](interfaces.md) and [components/storage.md](components/storage.md).
-- **Inventory service** (`INVENTORY_API_URL`) — external REST dependency consumed by `clients`,
-  declared in `infra/services.yaml` and indexed as `inventory-api` (`owner: null` — owned outside
-  this repo); see [interfaces.md](interfaces.md).
-- **Stripe** (`STRIPE_SECRET_KEY`) — external payments API consumed by `clients` via the `stripe`
-  npm package, declared in `infra/services.yaml` and indexed as `stripe-payments` (`owner: null` —
-  third-party for the outbound `rest` entry). `api` also owns a `webhook`-type entry under the
-  same `stripe-payments` name for the inbound `POST /stripe` receiver; see
-  [interfaces.md](interfaces.md).
-- **Shipping provider** (`SHIPPING_API_URL`) — external REST dependency consumed by `clients`,
-  declared in `infra/services.yaml` and indexed as `shipping-provider-api` (`owner: null` —
-  third-party for the outbound `rest` entry). `api` also owns a `webhook`-type entry under the
-  same `shipping-provider-api` name for the inbound `POST /shipping` receiver; see
-  [interfaces.md](interfaces.md).
+This repository consumes the `inventory-api`, `stripe-payments`, and `shipping-provider-api` REST services, the `order-processing-queue` SQS queue, the `order-attachments-bucket` S3 bucket, and the Kafka brokers backing `order-events`. `infra/services.yaml` declares the consumed services. If any of these systems is unavailable, the corresponding client call, event publication, queue operation, or attachment operation fails; see [interfaces.md](interfaces.md) for the indexed contracts.

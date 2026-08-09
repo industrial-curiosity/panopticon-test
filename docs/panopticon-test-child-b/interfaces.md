@@ -19,12 +19,11 @@
 ## `order-events` (kafka)
 
 - **Owner:** panopticon-test-child-b / events (this repo)
-- **Provenance:** extracted by LLM (no deterministic parser yet)
 - **Produced by this repo via:** `src/events/kafka-topics.yaml`, `src/events/producer.ts`
 
 ## `order-processing-queue` (sqs)
 
-- **Owner:** panopticon-test-child-b / worker (this repo)
+- **Owner:** panopticon-test-child-b / queue (this repo)
 - **Provenance:** extracted by LLM (no deterministic parser yet)
 - **Produced by this repo via:** `infra/sqs-queues.yaml`, `src/queue/processor.ts`
 - **Consumed by this repo via:** `infra/sqs-queues.yaml`, `src/queue/processor.ts`, `src/queue/worker.ts`
@@ -32,7 +31,6 @@
 ## `orders-api` (rest)
 
 - **Owner:** panopticon-test-child-b / api (this repo)
-- **Provenance:** extracted by LLM (no deterministic parser yet)
 - **Produced by this repo via:** `src/api/openapi.yaml`, `src/api/routes/orders.ts`
 
 ## `shipping-provider-api` (rest)

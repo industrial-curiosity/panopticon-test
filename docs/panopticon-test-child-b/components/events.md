@@ -2,33 +2,21 @@
 
 ## Responsibility
 
-Owns publishing order lifecycle events (`order.created`, `order.updated`, `order.cancelled`,
-`order.shipped`, `order.delivered`) to Kafka. Defined by `src/events/kafka-topics.yaml` (topic
-config) and `src/events/producer.ts` (publish function). Out of scope: no code in this repo
-currently calls `publishOrderEvent` — nothing in `api` or elsewhere emits events at runtime.
+The events component declares the `order-events` Kafka topic and publishes order lifecycle event payloads to it. It does not consume Kafka messages.
 
 ## Interfaces
 
-- Produces `order-events` (`kafka`), owned by this repo (`events` component). Declared in
-  `src/events/kafka-topics.yaml` and produced again by `src/events/producer.ts`
-  (`publishOrderEvent` sends to the `order-events` topic by name). See
-  [interfaces.md](../interfaces.md).
+This component produces the owned `order-events` Kafka interface, declared in `src/events/kafka-topics.yaml` and published by `src/events/producer.ts`. See [interfaces.md](../interfaces.md) for its indexed source files.
 
 ## Key modules
 
-- `src/events/kafka-topics.yaml` — declares the `order-events` topic: 12 partitions,
-  replication factor 3, 7-day retention (`retention.ms: 604800000`), `cleanup.policy: delete`.
-- `src/events/producer.ts` — `publishOrderEvent(event: OrderEvent): Promise<void>` connects a
-  `kafkajs` producer and sends a keyed message (key = `orderId`) to the `order-events` topic.
+- `src/events/kafka-topics.yaml` — topic declaration with partition count, replication factor, and retention policy.
+- `src/events/producer.ts` — Kafka producer and `OrderEvent` payload type; publishes `order.created`, `order.updated`, `order.cancelled`, `order.shipped`, and `order.delivered` events.
 
 ## Configuration
 
-- `KAFKA_BROKERS` — comma-separated broker list; defaults to `localhost:9092` when unset
-  (`src/events/producer.ts`).
+`KAFKA_BROKERS` supplies a comma-separated broker list; it defaults to `localhost:9092` when unset.
 
 ## Failure modes
 
-`publishOrderEvent` calls `producer.connect()` on every invocation with no reuse or reconnect
-logic, and does not catch errors from `connect()` or `send()` — a broker-connectivity failure
-propagates as an unhandled promise rejection to whatever calls this function. Since nothing
-currently calls it, this failure path is not exercised in the present codebase.
+Broker connection or send failures reject `publishOrderEvent`. The producer connects on every publish call in the visible implementation and never disconnects, so unavailable brokers directly prevent publication and each call incurs a new connection.

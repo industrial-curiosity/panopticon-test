@@ -1,53 +1,38 @@
 # panopticon-test-child-b — operations
 
+<!-- panopticon-analysis-scope:start -->
+## Panopticon analysis scope
+
+Panopticon excludes illustrative material from interface, dependency, and doc-drift analysis.
+
+### Excluded directories currently in this repository
+
+- None currently detected.
+
+Directories whose exact path component is one of `examples`, `samples`, `fixtures`, `testdata`, `demos`, `scaffolding`, `demo`, `scaffold` are excluded case-insensitively.
+Similar production paths, such as `src/sample-service`, remain in scope.
+
+Use `panopticon-ignore file` in one of a file's first five nonblank lines to exclude the whole file. Use `panopticon-ignore declaration` on a declaration line or the line immediately before it to exclude only that declaration.
+<!-- panopticon-analysis-scope:end -->
+
 ## Running locally
 
-`npm install` installs dependencies. Beyond that, only one of the four `package.json` scripts is
-currently runnable:
+Install the declared Node.js dependencies with `npm install`. Use `npm run build` to compile TypeScript with `tsc`, and `npm run worker` to start the SQS long-poll worker via `ts-node src/queue/worker.ts`.
 
-- `npm run worker` (`ts-node src/queue/worker.ts`) — runs; requires `ORDER_PROCESSING_QUEUE_URL`
-  (and `AWS_REGION`, `AWS` credentials via the standard SDK credential chain) to actually reach
-  SQS. See [components/worker.md](components/worker.md).
-- `npm run dev` (`ts-node src/index.ts`), `npm start` (`node dist/index.js`), and `npm run build`
-  (`tsc`, which would emit `dist/index.js` from `src/index.ts`) all depend on `src/index.ts`,
-  which does not exist anywhere in the repo or its git history. There is no assembled Express
-  app anywhere in `src/` — `src/api/routes/*` define routers but nothing mounts them. These three
-  scripts cannot currently run.
+The `dev` script runs `ts-node src/index.ts` and `start` runs `node dist/index.js`, but `src/index.ts` does not exist in the repository, so the build produces no `dist/` and neither command can be verified from the checked-in source.
 
 ## Testing
 
-No test suite exists: `package.json` defines no `test` script, and no `*.test.ts`/`*.spec.ts`
-files are present anywhere in the repo.
+No test scripts or test suites are declared in `package.json`. TypeScript compilation via `npm run build` is the available repository-level verification command.
 
 ## Deployment
 
-Not determinable from this repo. The only workflows under `.github/workflows/` are Panopticon's
-own PR/merge/close checks (`panopticon-pr.yml`, `panopticon-merge.yml`, `panopticon-pr-close.yml`)
-— thin references to reusable workflows in the `industrial-curiosity/panopticon-test` instance
-repo. There is no build/deploy pipeline or Dockerfile in the repo. `infra/` declares the resource
-shapes this service depends on (`infra/sqs-queues.yaml` — `order-processing-queue`;
-`infra/s3-buckets.yaml` — `order-attachments-bucket`; `infra/services.yaml` — the inventory,
-Stripe, and shipping base URLs), but nothing in the repo provisions or deploys them — see
-[architecture.md](architecture.md#dependencies) and [interfaces.md](interfaces.md).
+No deployment pipeline, environment promotion process, approval flow, or rollback procedure is present in the repository. The `infra/` YAML files declare interface-related resources only: the consumed services, the S3 bucket, and the SQS queue.
 
 ## Required configuration
 
-| Variable | Used by | Required |
-|---|---|---|
-| `INVENTORY_API_URL` | `clients` (`src/clients/inventory.ts`) | Yes (non-null-asserted) |
-| `STRIPE_SECRET_KEY` | `clients` (`src/clients/stripe.ts`) | Yes |
-| `SHIPPING_API_URL` | `clients` (`src/clients/shipping.ts`) | Yes (non-null-asserted) |
-| `KAFKA_BROKERS` | `events` (`src/events/producer.ts`) | No — defaults to `localhost:9092` |
-| `ORDER_PROCESSING_QUEUE_URL` | `worker` (`src/queue/processor.ts`) | Yes (non-null-asserted) |
-| `ORDER_ATTACHMENTS_BUCKET` | `storage` (`src/storage/attachments.ts`) | Yes (non-null-asserted) |
-| `AWS_REGION` | `worker`, `storage` | No — defaults to `us-east-1` |
-
-No secrets files or config files carry these values in the repo; they are read from `process.env`
-directly at each module's top level, so all are required at process-start time for the modules
-that use them regardless of which npm script (if any) is run.
+Set `INVENTORY_API_URL`, `STRIPE_SECRET_KEY`, `SHIPPING_API_URL`, `ORDER_PROCESSING_QUEUE_URL`, and `ORDER_ATTACHMENTS_BUCKET` for the applicable clients. Set `KAFKA_BROKERS` to override its local default, and set `AWS_REGION` to override the default `us-east-1` used by SQS and S3. The configuration comes from environment variables supplied at runtime; no configuration files or secret references are committed.
 
 ## Observability
 
-Not determinable from this repo. `src/queue/worker.ts` uses `console.log`/`console.error` for
-job-processing status and errors; no structured logging, metrics, dashboards, or alerting
-configuration is present anywhere in the codebase.
+The worker writes startup, processing, and per-job failure messages to standard output or error. No metrics, dashboards, tracing, or alert definitions are visible in the repository.
