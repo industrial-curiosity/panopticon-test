@@ -18,66 +18,32 @@ they land.
 
 ## Start here
 
-Create a private instance from this template, run its LiteLLM, OpenAI, or Bedrock
-configuration workflow, and
-initialize child repositories. The [org-owner setup guide](docs/setup-guide.md)
-walks through that process,
-including the four rollout gates (workflow access, effective configuration,
-caller identity/credentials, and real request compatibility), provider choices,
-template sync, the reviewed Bedrock credential-action example, customization
-protection, and local recovery from failed syncs. Bedrock model identity may be
-provided by its organization variable or by the non-secret instance default
-`llm.defaults.model`; the public template does not select a universal model.
-Runtime-only provider behavior changes do not force child re-bootstrap. A
-change to only an effective value also does not require bootstrap. The
-caller renderer owns the compatibility fingerprint and hashes only the
-semantic reusable-workflow target, caller permissions, configured mappings,
-credential mode, and caller-passed values. Instance-resolved operational
-defaults and Bedrock model values are runtime-only, even when shown in
-cosmetic generated comments; changes to them do not require child
-re-bootstrap. Changes to the actual rendered caller ABI require regeneration
-of affected callers; an incompatible caller receives a clear bootstrap
-recovery path. The reusable workflow owns the pre-job
-timeout fallback, so changing that shared default does not require child
-re-bootstrap. For a pinned workflow ref, bootstrap and
-local sync load that ref's renderer, so the generated fingerprint and reusable
-workflow use the same version.
-Instance administrators can change the value of the mapped organization
-job-timeout variable for existing children without regenerating callers.
-Renaming the mapped variable changes the caller compatibility revision and
-requires caller regeneration; legacy instance job-timeout defaults are
-ignored during migration.
-During the migration window, provider workflows retain and ignore the old
-optional `configuration_defaults` input so pre-change callers can dispatch and
-reach the legacy compatibility gate. Newly generated callers omit it. The
-trusted provider contract also exposes a separate full-contract `revision`
-for diagnostics and migration checks. The existing reusable-workflow wire input
-`configuration_revision` is intentionally retained for caller ABI compatibility,
-but carries the semantic `caller_revision`; existing compatible callers may use
-`legacy_revision`. Renaming that wire input would require a coordinated caller
-migration. A mismatch reports `caller compatibility revision changed` and gives
-the child-bootstrap recovery path.
-For required values, optional request budgets, defaults, and the exact
-organization integration path, use the [provider-configuration guide](docs/provider-configuration.md).
+Panopticon is a public template for giving an organization one shared view of
+its repositories, documentation, interfaces, and internal dependencies.
 
-To initialize a child repository, run the public launcher from that repository:
+To get started:
+
+1. Create a private instance from this template.
+2. Configure its LLM provider by following the [provider-configuration
+   guide](docs/provider-configuration.md).
+3. Initialize each child repository with the public launcher, run from that
+   repository:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/panopticon-ay-eye/main/install.py | python3
 ```
 
-Set `PANOPTICON_INSTANCE=YOUR-ORG/YOUR-INSTANCE-REPO` for a non-interactive run;
-for example,
-`PANOPTICON_INSTANCE=acme/panopticon-instance`. Authenticate every install,
-including for a public instance, with `GH_TOKEN`, `GITHUB_TOKEN`, or an existing
-`gh auth` session. Authentication provides a much higher GitHub API quota and is
-required for private instances. Set a token through your shell or CI secret
-environment; never place its value directly in the launcher command.
+For a non-interactive run, set `PANOPTICON_INSTANCE=YOUR-ORG/YOUR-INSTANCE-REPO`,
+for example `PANOPTICON_INSTANCE=acme/panopticon-instance`. Authenticate every
+install with `GH_TOKEN`, `GITHUB_TOKEN`, or an existing `gh auth` session;
+authentication is required for private instances and provides a higher GitHub
+API quota. Keep token values in your shell or CI secret environment, never in
+the launcher command.
 
-After the agent runs finalization, review the child repository's
-`panopticon-initialization-report.md`. It gives the current outcome and separates
-child-repository repairs from organization configuration follow-up. Complete any
-listed action, then rerun the exact finalization command from the report.
+For the complete setup process and operational guidance, see the [org-owner
+setup guide](docs/setup-guide.md). After initialization, review the child
+repository's `panopticon-initialization-report.md` and follow any actions it
+lists.
 
 ## How it works
 

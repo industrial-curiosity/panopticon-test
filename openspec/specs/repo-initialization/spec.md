@@ -192,28 +192,30 @@ responsible for its initial creation after validation.
 
 ### Requirement: Default bootstrap payload loads its import dependencies
 
-The default payload loader SHALL, when the fetched instance installer delegates
-to the template's bootstrap payload, fetch and register every direct
-`panopticon` module dependency required to import that bootstrap module before
-executing it. The modules SHALL be loaded through the existing validated,
-authenticated GitHub-contents path into the in-memory `panopticon` package;
-the loader SHALL not require installation to disk or a `PYTHONPATH` change.
+The default payload loader SHALL register `panopticon.providers` before
+executing any fetched module that imports it, including
+`panopticon.recovery`, and SHALL load the modules in dependency order before
+executing `panopticon.bootstrap`. The modules SHALL be loaded through the
+existing validated, authenticated GitHub-contents path into the in-memory
+`panopticon` package; the loader SHALL not require installation to disk or a
+`PYTHONPATH` change.
 
-#### Scenario: Default bootstrap imports the provider registry
+#### Scenario: Real recovery module imports the provider registry
 
-- **GIVEN** an uncustomized instance installer delegates to a bootstrap payload
-  that imports `panopticon.providers`
-- **WHEN** the public launcher loads and executes that payload
-- **THEN** it fetches and registers `panopticon.providers` before evaluating
-  `panopticon.bootstrap`, and the bootstrap begins without a module-not-found
-  error
+- **GIVEN** an uncustomized instance installer delegates to the template's
+  bootstrap payload and the fetched recovery module imports
+  `INSTANCE_CREDENTIAL_ACTION` from `panopticon.providers`
+- **WHEN** the public launcher loads the default payload
+- **THEN** it registers `panopticon.providers` before evaluating
+  `panopticon.recovery`, and the bootstrap begins without a
+  `ModuleNotFoundError`
 
 #### Scenario: Provider registry retrieval is invalid
 
 - **GIVEN** the default bootstrap requires `panopticon.providers`
 - **WHEN** the GitHub contents API returns an invalid provider-module payload
 - **THEN** the launcher fails with its controlled invalid-payload error before
-  executing the bootstrap module
+  executing the recovery or bootstrap modules
 
 ### Requirement: Managed child caller workflow consistency
 
@@ -1801,29 +1803,43 @@ and SHALL direct users not to put token values directly in the launcher command.
 ### Requirement: README provides concise project orientation
 
 The README SHALL provide a quickly scannable overview of the project's purpose,
-repository roles, primary
-workflow, and links to the setup guide and other detailed documentation. It
-SHALL use clear sections that
-separate at-a-glance orientation from navigation. Detailed setup instructions,
-configuration reference,
-implementation inventories, and operational procedures SHALL live in
-purpose-named documentation files
-rather than in the README. The README SHALL NOT include temporary implementation
-status, incomplete-work
-notes, or feature-wiring details. At the top of the README, it SHALL retain the
-project logo and an obvious
-link to the organization's architecture documentation. At the end of the README,
-it SHALL display a
-thumbnail for the specified Panopticon YouTube video that opens
+repository roles, primary workflow, and links to the setup guide and other
+detailed documentation. It SHALL use clear sections that separate at-a-glance
+orientation from navigation. Its `Start here` section SHALL be a readable,
+user-focused introduction that explains what Panopticon does, identifies the
+first setup action, states the supported authentication expectation, and links
+to the authoritative setup and provider guides. The `Start here` section SHALL
+use short paragraphs and/or lists rather than a dense wall of text. Detailed
+setup instructions, configuration reference, implementation inventories,
+provider internals, compatibility or migration mechanics, and operational
+recovery procedures SHALL live in purpose-named documentation files rather
+than in the README. The README SHALL NOT include temporary implementation
+status, incomplete-work notes, or feature-wiring details. At the top of the
+README, it SHALL retain the project logo and an obvious link to the
+organization's architecture documentation. At the end of the README, it SHALL
+display a thumbnail for the specified Panopticon YouTube video that opens
 `https://www.youtube.com/watch?v=sIJ9XhBSkI8` in a new browser tab or window.
 
 #### Scenario: New maintainer opens the README
 
 - **WHEN** a maintainer reads the README for the first time
 - **THEN** they can understand Panopticon's purpose, the template/instance/child
-  roles, and the primary
-  lifecycle at a glance, then follow clearly labelled links for setup and deeper
-  reference
+  roles, and the primary lifecycle at a glance, then follow clearly labelled
+  links for setup and deeper reference
+
+#### Scenario: Start Here gives a first action
+
+- **WHEN** a prospective user reads the README's `Start here` section
+- **THEN** they can identify the first setup action, the public launcher command,
+  the supported authentication expectation, and the guide that contains the
+  complete setup procedure without reading an implementation reference
+
+#### Scenario: Start Here remains readable
+
+- **WHEN** a reviewer scans the README's `Start here` section
+- **THEN** the section is composed of short paragraphs and/or lists with visible
+  actions and links, and does not present onboarding as one dense implementation
+  detail block
 
 #### Scenario: Maintainer finds the organization architecture
 
@@ -1834,11 +1850,11 @@ thumbnail for the specified Panopticon YouTube video that opens
 
 #### Scenario: Reader needs detailed setup or configuration
 
-- **WHEN** a reader needs instructions for configuring an instance,
-  synchronizing a template, or using a
-  feature in detail
+- **WHEN** a reader needs instructions for configuring an instance, selecting a
+  provider, synchronizing a template, recovering from an operational failure,
+  or understanding caller compatibility
 - **THEN** the README directs them to a purpose-named guide instead of embedding
-  the detailed procedure
+  the detailed procedure or mechanism in `Start here`
 
 #### Scenario: A feature has incomplete automation
 
@@ -1961,3 +1977,23 @@ through Panopticon configuration and SHALL use placeholders only.
 - **WHEN** an owner selects `instance-managed`
 - **THEN** setup guidance provides the reviewed example, fixed destination,
   broker adaptation boundary, region-output contract, and validation step
+
+### Requirement: Instance-managed setup exposes the reviewed credential-action example
+
+The public instance setup guide SHALL link to a reviewed credential-action
+skeleton and explain that an instance owner must copy it to the fixed path,
+replace only the organization-specific broker step, verify the region output,
+and commit the action. The guide SHALL state that the action runs for the child
+caller identity and accepts no credential value through Panopticon configuration.
+
+#### Scenario: Instance owner enables instance-managed Bedrock credentials
+
+- **WHEN** an owner selects the `instance-managed` credential mode
+- **THEN** the setup guide provides the example link, fixed destination path,
+  broker adaptation boundary, region-output contract, and validation step
+
+#### Scenario: Public example is reviewed for secret safety
+
+- **WHEN** the example and setup guide are checked into the public template
+- **THEN** they contain placeholders or synthetic values only and do not accept,
+  persist, or print credential values
