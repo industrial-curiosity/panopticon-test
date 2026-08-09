@@ -4,5 +4,20 @@
     "init": "blocking",
     "interface-conflict": "advisory"
   },
+  "llm": {
+    "provider": "litellm",
+    "secrets": {
+      "api_key": "PANOPTICON_LLM_API_KEY",
+      "instance_token": "PANOPTICON_INSTANCE_TOKEN"
+    },
+    "variables": {
+      "endpoint": "PANOPTICON_LLM_ENDPOINT",
+      "job_timeout_minutes": "PANOPTICON_LLM_JOB_TIMEOUT_MINUTES",
+      "max_attempts": "PANOPTICON_LLM_MAX_ATTEMPTS",
+      "max_correction_attempts": "PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS",
+      "model": "PANOPTICON_LLM_MODEL",
+      "timeout_seconds": "PANOPTICON_LLM_TIMEOUT_SECONDS"
+    }
+  },
   "schema_version": 1
 }
