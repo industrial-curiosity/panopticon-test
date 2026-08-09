@@ -314,15 +314,7 @@ def _load_default_payload_from_github(instance, ref=None):
     )
     sys.modules["panopticon"] = package
 
-    recovery = types.ModuleType("panopticon.recovery")
-    recovery.__package__ = "panopticon"
-    package.recovery = recovery
-    sys.modules["panopticon.recovery"] = recovery
-    exec(
-        compile(fetch("panopticon/recovery.py"), "panopticon/recovery.py", "exec"),
-        recovery.__dict__,
-    )
-
+    # Register providers before recovery because recovery imports its action path at module load.
     providers = types.ModuleType("panopticon.providers")
     providers.__package__ = "panopticon"
     package.providers = providers
@@ -330,6 +322,15 @@ def _load_default_payload_from_github(instance, ref=None):
     exec(
         compile(fetch("panopticon/providers.py"), "panopticon/providers.py", "exec"),
         providers.__dict__,
+    )
+
+    recovery = types.ModuleType("panopticon.recovery")
+    recovery.__package__ = "panopticon"
+    package.recovery = recovery
+    sys.modules["panopticon.recovery"] = recovery
+    exec(
+        compile(fetch("panopticon/recovery.py"), "panopticon/recovery.py", "exec"),
+        recovery.__dict__,
     )
 
     callers = types.ModuleType("panopticon.callers")
