@@ -41,6 +41,20 @@ import urllib.request
 from pathlib import Path
 
 from .config import load_repo_config
+from .features import (
+    FEATURE_MANIFEST_PATH,
+    FEATURE_RECEIPT_PATH,
+    FeatureConfigError,
+    build_receipt,
+    cleanup_retired,
+    load_manifest_bytes,
+    load_receipt,
+    retired_artifacts,
+    stage_artifacts,
+    validate_feature_config,
+    write_receipt,
+    write_staged_artifacts,
+)
 from .providers import ProviderConfigError, resolve_provider_contract
 
 DEFAULT_BRANCH = "main"
@@ -192,6 +206,7 @@ def download_skills(owner, repo, ref, tree, token=None, child_root=".", dest_loc
         item for item in tree
         if item["type"] == "blob"
         and item["path"].startswith(SKILLS_PREFIX + "panopticon-")
+        and not item["path"].startswith(SKILLS_PREFIX + "panopticon-feature-")
     ]
     count = 0
     for item in blobs:
@@ -235,7 +250,9 @@ def git_blob_sha(data):
 def _skill_tree_entries(tree):
     return [
         item for item in tree
-        if item["type"] == "blob" and item["path"].startswith(SKILLS_PREFIX + "panopticon-")
+        if item["type"] == "blob"
+        and item["path"].startswith(SKILLS_PREFIX + "panopticon-")
+        and not item["path"].startswith(SKILLS_PREFIX + "panopticon-feature-")
     ]
 
 
@@ -330,13 +347,68 @@ def _compare(local, item, relative):
 def _fetch_org_config(owner, repo, ref, token=None, urlopen=urllib.request.urlopen):
     """Fetch the instance configuration required to render managed child callers."""
     try:
-        return json.loads(
+        document = json.loads(
             _fetch_file_bytes(owner, repo, "panopticon.config.json", ref, token, urlopen)
         )
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise RuntimeError(
             f"invalid panopticon.config.json fetched from {owner}/{repo}@{ref}: {exc}"
         ) from exc
+    if not isinstance(document, dict):
+        raise RuntimeError(f"invalid panopticon.config.json fetched from {owner}/{repo}@{ref}: expected object")
+    return document
+
+
+def _feature_state(owner, repo, ref, org_config, child_root, token, urlopen):
+    if "features" not in org_config:
+        return {"schema_version": 1, "features": {}}, {}, load_receipt(
+            child_root, {"schema_version": 1, "features": {}}
+        ), []
+    manifest = load_manifest_bytes(
+        _fetch_file_bytes(owner, repo, FEATURE_MANIFEST_PATH.as_posix(), ref, token, urlopen)
+    )
+    modes = validate_feature_config(org_config.get("features"), manifest)
+    previous = load_receipt(child_root, manifest)
+    staged = stage_artifacts(
+        manifest,
+        modes,
+        lambda path: _fetch_file_bytes(owner, repo, path, ref, token, urlopen),
+    )
+    return manifest, modes, previous, staged
+
+
+def _feature_updates(child_root, staged, retired, previous):
+    findings = []
+    for entry in staged:
+        path = Path(child_root) / entry["destination"]
+        if not path.is_file():
+            findings.append(f"{entry['destination']} would be created (missing locally)")
+        elif path.read_bytes() != entry["content"]:
+            findings.append(
+                f"{entry['destination']} would be updated (content differs from the instance's current copy)"
+            )
+    for entry in retired:
+        findings.append(f"{entry['destination']} would be deleted (feature {entry['feature']} is disabled)")
+    if previous is None:
+        findings.append(f"{FEATURE_RECEIPT_PATH.as_posix()} would be created")
+    return findings
+
+
+def _unmanaged_feature_findings(child_root, manifest, previous):
+    managed = {
+        artifact["destination"]
+        for definition in manifest["features"].values()
+        for artifact in definition["artifacts"]
+    }
+    owned = {
+        entry["destination"]
+        for entry in (previous or {}).get("artifacts", [])
+    }
+    findings = []
+    for relative in sorted(managed - owned):
+        if (Path(child_root) / relative).is_file():
+            findings.append(f"{relative} is child-owned or unrecognized; review before removal")
+    return findings
 
 
 def _caller_namespace(source):
@@ -476,6 +548,14 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
         return 1
 
     try:
+        feature_manifest, feature_modes, previous_feature_receipt, staged_features = _feature_state(
+            owner, repo, workflow_ref, org_config, child_root, token, urlopen
+        )
+    except (FeatureConfigError, RuntimeError) as exc:
+        print(f"error: could not load valid instance feature packages: {exc}")
+        return 1
+
+    try:
         tree = _fetch_tree(owner, repo, default_branch, token, urlopen)
         tooling_modules = _remote_local_tooling_modules(
             owner, repo, default_branch, token, urlopen
@@ -497,10 +577,31 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     except CallerRendererError as exc:
         print(f"error: could not load instance caller renderer: {exc}")
         return 1
-    resource_findings = tooling_findings + [
+    feature_packages_configured = "features" in org_config
+    retired_features = (
+        retired_artifacts(
+            previous_feature_receipt or {"artifacts": []},
+            [
+                {"feature": entry["feature"], "destination": entry["destination"]}
+                for entry in staged_features
+            ],
+        )
+        if feature_packages_configured
+        else []
+    )
+    feature_findings = (
+        _feature_updates(child_root, staged_features, retired_features, previous_feature_receipt)
+        if feature_packages_configured
+        else []
+    )
+    resource_findings = tooling_findings + feature_findings + [
         f"{relative} {reason}" for relative, _, reason in callers
     ]
     unmanaged_findings = _unmanaged_tooling_findings(tree, child_root, tooling_modules)
+    if feature_packages_configured:
+        unmanaged_findings += _unmanaged_feature_findings(
+            child_root, feature_manifest, previous_feature_receipt
+        )
 
     if args.check_updates:
         if not resource_findings and not unmanaged_findings:
@@ -515,7 +616,7 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     if not resource_findings:
         for finding in unmanaged_findings:
             print(f"  warning: {finding}")
-        print("Everything is current — no managed skills, tooling, or workflow callers changed.")
+        print("Everything is current — no managed skills, tooling, feature artifacts, or workflow callers changed.")
         return 0
 
     for finding in unmanaged_findings:
@@ -525,10 +626,36 @@ def main(argv=None, env=None, child_root=".", urlopen=urllib.request.urlopen):
     n_modules = download_local_tooling(
         owner, repo, default_branch, tree, tooling_modules, token, child_root, urlopen
     )
+    if feature_packages_configured:
+        write_staged_artifacts(staged_features, child_root)
+        prior = previous_feature_receipt or {"artifacts": []}
+        _, pending = cleanup_retired(
+            retired_features, child_root, interactive=False, print_fn=print
+        )
+        desired_features = [
+            {"feature": entry["feature"], "destination": entry["destination"]}
+            for entry in staged_features
+        ]
+        retired_keys = {
+            (entry["feature"], entry["destination"]) for entry in retired_features
+        }
+        retained_features = [
+            entry for entry in prior["artifacts"]
+            if (entry["feature"], entry["destination"]) not in retired_keys
+        ]
+        write_receipt(
+            build_receipt(
+                feature_manifest,
+                feature_modes,
+                desired_features + retained_features,
+                pending,
+            ),
+            child_root,
+        )
     # Reuse the pre-write render so renderer failures cannot occur after managed resources are written.
     _write_callers(child_root, callers)
     print(
-        f"{n_skills} skill file(s), {n_modules} tooling module(s), and {len(callers)} workflow caller(s) synced from "
+        f"{n_skills} skill file(s), {n_modules} tooling module(s), feature artifacts, and {len(callers)} workflow caller(s) synced from "
         f"{owner}/{repo}@{default_branch}."
     )
     print("Review `git diff`/`git status` before committing.")

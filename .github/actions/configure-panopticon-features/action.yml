@@ -1,0 +1,56 @@
+name: Configure Panopticon feature
+description: Validate and persist one template-owned feature mode
+
+inputs:
+  feature:
+    description: Registered template feature identifier, such as okf
+    required: true
+  mode:
+    description: Feature mode disabled, advisory, or blocking; empty preserves the current mode
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Validate and persist feature mode
+      shell: python
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+        FEATURE: ${{ inputs.feature }}
+        MODE: ${{ inputs.mode }}
+      run: |
+        import os
+
+        from panopticon.configure_instance import configure_feature
+        from panopticon.features import FeatureConfigError
+
+        def fail(reason):
+            summary = os.environ.get("GITHUB_STEP_SUMMARY")
+            if summary:
+                with open(summary, "a", encoding="utf-8") as handle:
+                    handle.write("## Panopticon feature configuration failed\n\n")
+                    handle.write(f"- Feature: `{os.environ['FEATURE']}`\n")
+                    handle.write(f"- Requested mode: `{os.environ['MODE'] or '(preserve current)'}`\n")
+                    handle.write(f"- Evidence: {reason}\n\n")
+                    handle.write("Fix location: rerun this workflow with a registered feature and one of disabled, advisory, or blocking.\n")
+            print(f"::error::{reason}; see the step summary")
+            raise SystemExit(1)
+
+        try:
+            configured = configure_feature(
+                ".", os.environ["FEATURE"], os.environ["MODE"] or None
+            )
+        except (FeatureConfigError, OSError, ValueError) as exc:
+            fail(f"Panopticon feature configuration is invalid: {exc}")
+        except Exception as exc:
+            fail(f"Unexpected feature configuration failure: {exc}")
+
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as handle:
+                handle.write("## Panopticon feature configuration validated\n\n")
+                handle.write(f"- Feature: `{os.environ['FEATURE']}`\n")
+                handle.write(f"- Effective mode: `{configured['mode']}`\n")
+                handle.write("- Scope: template-owned artifacts and checks only.\n")
+                handle.write("- No secret or credential values were accepted or persisted.\n")

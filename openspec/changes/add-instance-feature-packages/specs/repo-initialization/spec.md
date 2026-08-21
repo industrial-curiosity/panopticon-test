@@ -3,6 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Bootstrap installs effective feature artifacts
+
 Bootstrap SHALL resolve the effective feature registry and modes after reading
 valid instance configuration and before writing managed child resources. It
 SHALL install only artifacts for enabled features, write the feature receipt,
@@ -26,6 +27,7 @@ feature artifact is written. Bootstrap SHALL preserve the rule that
   configuration or registry condition
 
 ### Requirement: Initialization honors feature mode
+
 Initialization finalization SHALL obtain effective feature mode from managed
 bootstrap state. It SHALL run feature validation only when the feature is
 enabled, report advisory findings without withholding the initialization flag,

@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # Glossary
 
 * Interface: a mechanism that can be produced to or consumed from, eg. REST

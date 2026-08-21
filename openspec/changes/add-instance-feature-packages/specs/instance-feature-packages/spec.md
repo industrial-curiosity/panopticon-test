@@ -3,6 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Template-owned feature registry
+
 The template SHALL publish a versioned feature registry under `features/` that
 defines every supported feature ID, supported mode, package-relative source
 file, and child destination. The registry SHALL reject unknown feature IDs,
@@ -24,6 +25,7 @@ paths. Instance configuration SHALL select only a registered feature mode.
   unsupported feature ID
 
 ### Requirement: Generic feature configuration workflow
+
 The template SHALL provide `Configure Panopticon — Features` as a manual GitHub
 Actions workflow with generic `feature` and `mode` inputs. It SHALL validate the
 pair against the registry, update only the selected feature's mode in
@@ -47,6 +49,7 @@ resetting feature selections.
 - **THEN** it preserves that existing mode
 
 ### Requirement: Feature artifact receipt and cleanup
+
 Bootstrap and local sync SHALL create a managed child feature receipt containing
 the selected feature modes, registry revision, and exact installed
 feature-owned child paths. They SHALL fetch and validate every desired feature
@@ -85,6 +88,7 @@ unrecognized child files SHALL NOT be deleted.
   the invalid receipt entry
 
 ### Requirement: Feature mode semantics
+
 Every registered feature SHALL support `disabled`, `advisory`, and `blocking`
 modes. Disabled SHALL omit feature artifact selection and skip feature checks.
 Advisory SHALL run feature checks and report findings without failing the
@@ -104,4 +108,3 @@ secrets, or arbitrary workflow selection.
 - **WHEN** an OKF conformance check finds a violation in advisory mode
 - **THEN** it records the finding and the containing initialization or PR
   workflow remains successful because of that finding
-

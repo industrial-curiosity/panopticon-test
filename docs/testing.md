@@ -1,3 +1,7 @@
+---
+type: guide
+---
+
 # Testing
 
 Panopticon's Python tooling is stdlib-only (see
@@ -157,6 +161,18 @@ the existing managed resource set, creates or updates only its open
 automation-owned pull request when resources changed, creates a new one after a
 prior pull request is merged or closed, and creates no pull request when
 current.
+
+## Optional feature coverage
+
+`tests/test_features.py`, `tests/test_feature_lifecycle.py`, and
+`tests/test_okf.py` cover registry and mode validation, configuration
+preservation, receipt ownership, staged installation, interactive and
+non-interactive cleanup, dry-run reporting, constrained frontmatter, reserved
+index/log diagnostics, and deterministic interface rendering. Run them with:
+
+```bash
+python3 -m unittest tests.test_features tests.test_feature_lifecycle tests.test_okf
+```
 
 ## Bedrock onboarding-hardening coverage
 

@@ -3,6 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Local sync script
+
 The template repo SHALL provide a script, runnable from an already-bootstrapped
 child repo with no instance repo clone (`python3 -m panopticon.sync` or
 equivalent), that reconciles complete managed resource directories from the
@@ -67,4 +68,3 @@ delete any file.
 - **WHEN** the sync script is run with `--check-updates`
 - **THEN** it reports which files would change or be removed and exits without
   writing or deleting any file
-

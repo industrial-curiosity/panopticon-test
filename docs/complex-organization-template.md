@@ -1,3 +1,7 @@
+---
+type: guide
+---
+
 # Complex-organization instance template
 
 The complex-organization template creates a reviewable, non-secret overlay for

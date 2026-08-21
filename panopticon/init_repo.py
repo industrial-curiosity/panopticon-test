@@ -32,6 +32,7 @@ from pathlib import Path
 
 from .config import load_repo_config, save_repo_config
 from .docs import validate_docs
+from .features import FeatureConfigError, load_receipt, validate_enabled_features
 from .index import KIND_LOCAL, IndexValidationError, load_index
 
 _EXISTING_DOC_DIRS = ("docs", "doc", "documentation")
@@ -104,6 +105,23 @@ def validate_child(child_root, repo_name, docs_location):
     except IndexValidationError as exc:
         problems.extend(f"local index: {p}" for p in exc.problems)
     return problems
+
+
+def validate_feature_state(child_root, docs_location):
+    """Validate enabled feature artifacts from managed bootstrap state."""
+    try:
+        receipt = load_receipt(child_root)
+    except FeatureConfigError as exc:
+        return [f"feature receipt: {exc}"], True
+    if receipt is None:
+        return [], False
+    try:
+        findings, blocking = validate_enabled_features(
+            receipt["modes"], root=child_root, docs_root=Path(child_root) / docs_location
+        )
+    except FeatureConfigError as exc:
+        return [f"feature validation: {exc}"], True
+    return findings, blocking
 
 
 def _report_item(where, issue, next_step):
@@ -417,6 +435,9 @@ def initialize(child_root, repo_name, instance, docs_location=None, workflow_ref
     )
 
     problems = validate_child(child_root, repo_name, docs_location)
+    feature_findings, feature_blocking = validate_feature_state(child_root, docs_location)
+    advisory_feature_findings = [] if feature_blocking else feature_findings
+    problems.extend(feature_findings if feature_blocking else [])
     if problems:
         messages.append("initialization requirements not met — panopticon/config.json NOT written:")
         messages.extend(f"  - {p}" for p in problems)
@@ -431,7 +452,10 @@ def initialize(child_root, repo_name, instance, docs_location=None, workflow_ref
         messages.append(f"wrote {report_path.name} (initialization blocked)")
         return 1, messages
 
-    org_messages = []
+    org_messages = [
+        f"feature validation advisory finding: {finding}"
+        for finding in advisory_feature_findings
+    ]
     if not skip_secret_check:
         org_messages = verify_org_secrets(instance.split("/")[0], child_root, runner=runner)
         messages.extend(org_messages)

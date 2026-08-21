@@ -41,6 +41,19 @@ from .callers import (
     caller_workflow_text as shared_caller_workflow_text,
 )
 from .providers import ProviderConfigError, resolve_provider_contract
+from .features import (
+    FEATURE_MANIFEST_PATH,
+    FeatureConfigError,
+    build_receipt,
+    cleanup_retired,
+    load_manifest_bytes,
+    load_receipt,
+    retired_artifacts,
+    stage_artifacts,
+    validate_feature_config,
+    write_receipt,
+    write_staged_artifacts,
+)
 from .recovery import (
     child_bootstrap_command,
     configuration_recovery,
@@ -367,6 +380,7 @@ def download_skills(owner, repo, ref, tree, token=None, child_root=".", dest_loc
         item for item in tree
         if item["type"] == "blob"
         and item["path"].startswith(SKILLS_PREFIX + "panopticon-")
+        and not item["path"].startswith(SKILLS_PREFIX + "panopticon-feature-")
     ]
     if not blobs:
         print("  warning: no panopticon-* skills found under .agents/skills/ in the instance repo")
@@ -383,6 +397,44 @@ def download_skills(owner, repo, ref, tree, token=None, child_root=".", dest_loc
         count += 1
         print(f"  [{count}/{total}] {relative}")
     return count
+
+
+def stage_feature_package(owner, repo, ref, manifest, modes, token=None,
+                          urlopen=urllib.request.urlopen):
+    """Fetch all selected feature bytes before any feature artifact is written."""
+    return stage_artifacts(
+        manifest,
+        modes,
+        lambda path: _fetch_file_bytes(owner, repo, path, ref, token, urlopen),
+    )
+
+
+def _feature_installed_entries(staged):
+    return [
+        {"feature": entry["feature"], "destination": entry["destination"]}
+        for entry in staged
+    ]
+
+
+def reconcile_feature_artifacts(previous, staged, modes, manifest, child_root=".",
+                                interactive=False, prompt=input, print_fn=print):
+    """Apply staged feature bytes, clean retired receipt paths, and write a new receipt."""
+    desired = _feature_installed_entries(staged)
+    prior = previous or {"artifacts": []}
+    retired = retired_artifacts(prior, desired)
+    write_staged_artifacts(staged, child_root)
+    _, pending = cleanup_retired(
+        retired, child_root, interactive=interactive, prompt=prompt, print_fn=print_fn
+    )
+    retained = [
+        entry for entry in prior["artifacts"]
+        if (entry["feature"], entry["destination"])
+        not in {(item["feature"], item["destination"]) for item in retired}
+    ]
+    installed = desired + retained + pending
+    receipt = build_receipt(manifest, modes, installed, pending)
+    write_receipt(receipt, child_root)
+    return receipt
 
 # ── Local tooling vendoring ─────────────────────────────────────────────────────
 # The exact transitive import closure of `python3 -m panopticon.init_repo` and the
@@ -896,6 +948,41 @@ def main(env=None, child_root=".", prompt_fn=None, urlopen=urllib.request.urlope
         return 1
     print(f"  llm provider: {contract['provider']}")
 
+    feature_packages_configured = "features" in org_config
+    try:
+        if "features" not in org_config:
+            # Instances created before feature packages shipped have no selection to resolve.
+            # Keep their disabled-by-default bootstrap compatible; once the instance config
+            # carries the feature field, the registry is mandatory and validated below.
+            feature_manifest = {"schema_version": 1, "features": {}}
+            feature_modes = {}
+            previous_feature_receipt = load_receipt(child_root, feature_manifest)
+            staged_features = []
+        else:
+            feature_manifest = load_manifest_bytes(
+                _fetch_file_bytes(
+                    owner, repo, FEATURE_MANIFEST_PATH.as_posix(), ref, token, urlopen
+                )
+            )
+            feature_modes = validate_feature_config(org_config.get("features"), feature_manifest)
+            previous_feature_receipt = load_receipt(child_root, feature_manifest)
+            staged_features = stage_feature_package(
+                owner, repo, ref, feature_manifest, feature_modes, token, urlopen
+            )
+    except (FeatureConfigError, RuntimeError) as exc:
+        print(f"\n  error: could not resolve instance feature packages: {exc}\n")
+        print(
+            "  Fix the instance feature registry or configuration, then rerun bootstrap. "
+            "No feature artifact was written."
+        )
+        return 1
+    enabled_features = [
+        f"{feature_id}={mode}" for feature_id, mode in feature_modes.items() if mode != "disabled"
+    ]
+    print(
+        "  feature modes: " + (", ".join(enabled_features) if enabled_features else "all disabled")
+    )
+
     try:
         rendered_workflows = _render_caller_workflows(
             caller_workflows,
@@ -961,6 +1048,23 @@ def main(env=None, child_root=".", prompt_fn=None, urlopen=urllib.request.urlope
     except RuntimeError as exc:
         print(f"  error: {exc}")
         return 1
+
+    if feature_packages_configured or previous_feature_receipt is not None:
+        print("\nApplying feature package state...")
+        try:
+            receipt = reconcile_feature_artifacts(
+                previous_feature_receipt,
+                staged_features,
+                feature_modes,
+                feature_manifest,
+                child_root,
+                interactive=prompt_fn is not None or sys.stdin.isatty(),
+                prompt=prompt_fn or input,
+            )
+            print(f"  feature receipt written → {receipt['registry_revision'][:12]}")
+        except FeatureConfigError as exc:
+            print(f"  error: could not update feature artifacts: {exc}")
+            return 1
 
     # Wire workflows.
     print("\nWiring GitHub Actions workflows...")

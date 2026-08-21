@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .config import ORG_CONFIG_BASENAME
+from .features import FeatureConfigError, load_manifest, validate_feature_config
 from .providers import PROVIDERS, ProviderConfigError, provider_config
 
 
@@ -56,6 +57,29 @@ def configure(instance_root, provider, names, credential_mode=None, defaults=Non
     document["llm"] = llm
     path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return llm
+
+
+def configure_feature(instance_root, feature, mode=None):
+    """Persist one registered feature mode while preserving all other config fields."""
+    path = Path(instance_root) / ORG_CONFIG_BASENAME
+    document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if not isinstance(document, dict):
+        raise FeatureConfigError(f"{ORG_CONFIG_BASENAME} must contain a JSON object")
+    manifest = load_manifest(instance_root)
+    existing = document.get("features", {})
+    effective = validate_feature_config(existing, manifest)
+    if feature not in manifest["features"]:
+        raise FeatureConfigError(
+            f"unsupported feature ID {feature!r}; supported features: "
+            f"{', '.join(manifest['features'])}"
+        )
+    selected_mode = mode or effective[feature]
+    candidate = dict(existing)
+    candidate[feature] = {"mode": selected_mode}
+    validate_feature_config(candidate, manifest)
+    document["features"] = candidate
+    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return candidate[feature]
 
 
 def build_parser():

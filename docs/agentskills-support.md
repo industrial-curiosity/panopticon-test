@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # Agent Skills (SKILL.md) discovery paths across AI tools and IDEs
 
 Where AI tools and IDEs look for the [Agent Skills](https://agentskills.io) open

@@ -3,6 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Feature-controlled OKF generation
+
 Panopticon documentation generation SHALL use the installed OKF skill and
 templates when the effective OKF feature mode is advisory or blocking. It SHALL
 then produce constrained YAML frontmatter with a non-empty `type` field for each

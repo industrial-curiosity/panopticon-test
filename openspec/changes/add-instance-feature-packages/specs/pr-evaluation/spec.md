@@ -3,6 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Feature-mode PR evaluation
+
 Each provider-specific reusable PR workflow SHALL load the effective instance
 feature modes from its checked-out instance configuration and run feature checks
 through fixed conditional steps or fixed environment flags. It SHALL not add a
@@ -25,6 +26,7 @@ the existing final gating outcome.
   feature artifacts in the child
 
 ### Requirement: Pinned workflow summary warning
+
 The shared PR workflow SHALL compare the child caller's actual reusable
 workflow ref with the instance configuration's `workflow_ref`. When the refs
 differ, the first section of its step summary SHALL be a non-blocking caution
@@ -39,4 +41,3 @@ warning.
   instance's configured `workflow_ref`
 - **THEN** the summary begins with a caution warning that names both refs and
   remains non-blocking
-

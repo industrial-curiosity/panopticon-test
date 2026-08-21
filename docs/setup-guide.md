@@ -1,3 +1,7 @@
+---
+type: guide
+---
+
 # Org-owner setup guide
 
 How to stand up Panopticon for an organization: create your private instance
@@ -508,6 +512,28 @@ run.
   dependency or interface
   can't be resolved automatically, developers pin it with a hint comment — see
   `docs/hint-reference.md` for every hint form and exactly how each one behaves.
+
+### Optional feature configuration
+
+Instance maintainers can enable template-owned optional capabilities from the
+[Configure Panopticon — Features workflow](https://github.com/YOUR-ORG/YOUR-INSTANCE-REPO/actions/workflows/configure-panopticon-features.yml).
+Replace `YOUR-ORG` and `YOUR-INSTANCE-REPO` with the organization and private
+instance repository before opening the link.
+
+Select a registered feature and one of these modes:
+
+- `disabled` — do not install the feature or run its checks.
+- `advisory` — install it and report findings while migrating existing child
+  documentation.
+- `blocking` — install it and fail initialization or PR gating on findings.
+
+For the initial OKF rollout, select `okf` with `advisory`, bootstrap or sync
+the child repositories, run the installed documentation-generation guidance,
+review the generated Markdown, and commit the migration. Select `blocking`
+after the child bundles validate cleanly. Selecting `disabled` stops new
+selection and offers cleanup during interactive bootstrap; non-interactive
+bootstrap and `python3 -m panopticon.sync` remove only paths recorded in the
+managed feature receipt and never commit those deletions.
 
 ## 4. Initialize a child repo
 

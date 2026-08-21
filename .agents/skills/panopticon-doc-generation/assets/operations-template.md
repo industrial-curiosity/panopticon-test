@@ -1,3 +1,6 @@
+<!-- When the OKF feature is advisory or blocking, prepend the installed
+     constrained frontmatter with type: operations. -->
+
 # {Repo name} — operations
 
 <!-- panopticon-analysis-scope:start -->

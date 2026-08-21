@@ -70,9 +70,11 @@ Defaults to an empty list when omitted, validated the same way as ``protected_pa
 """
 
 import json
+import hashlib
 from pathlib import Path
 
 from . import SCHEMA_VERSION
+from .features import FeatureConfigError, load_manifest, validate_feature_config
 from .providers import INSTANCE_CREDENTIAL_ACTION, resolve_provider_contract
 
 ORG_CONFIG_BASENAME = "panopticon.config.json"
@@ -192,16 +194,39 @@ def load_org_config(instance_root="."):
         isinstance(r, str) and r for r in internal_registries
     ):
         raise ConfigError("org config: 'internal_registries' must be a list of non-empty host/URL strings")
+    try:
+        manifest = load_manifest(instance_root)
+    except FeatureConfigError as exc:
+        if doc.get("features"):
+            raise ConfigError(str(exc)) from exc
+        manifest = {"schema_version": 1, "features": {}}
+    try:
+        feature_modes = validate_feature_config(doc.get("features"), manifest)
+    except FeatureConfigError as exc:
+        raise ConfigError(str(exc)) from exc
     return {
         "schema_version": doc.get("schema_version", SCHEMA_VERSION),
         "gating": gating,
         "workflow_ref": doc.get("workflow_ref"),
         "protected_paths": protected_paths,
         "internal_registries": internal_registries,
+        "features": {feature_id: {"mode": mode} for feature_id, mode in feature_modes.items()},
         # Provider selection is deliberately not defaulted. General configuration consumers can
         # load a new template instance; provider-dependent paths call provider_contract() below.
         "llm": doc.get("llm"),
     }
+
+
+def effective_feature_modes(org_config):
+    """Return ``feature_id -> mode`` from a loaded org configuration."""
+    features = org_config.get("features", {})
+    return {feature_id: entry["mode"] for feature_id, entry in features.items()}
+
+
+def configuration_revision(document):
+    """Return a secret-safe revision for an instance configuration document."""
+    payload = json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def provider_contract(org_config):
