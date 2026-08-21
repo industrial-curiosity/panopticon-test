@@ -1559,7 +1559,9 @@ variables only for Bedrock `github-oidc` mode. It SHALL NOT copy unselected
 provider workflows into the child or use blanket `secrets: inherit`. Onboarding
 documentation SHALL explain that a reusable workflow does not transfer caller
 identity and SHALL give the per-child identity/credential provisioning owner
-and proof step.
+and proof step. A caller rendered from a generated organization profile SHALL
+meet the same contract and SHALL include the generated four-gate onboarding
+references without accepting arbitrary child workflow steps.
 
 #### Scenario: OpenAI child caller generated
 
@@ -1592,6 +1594,12 @@ and proof step.
 - **THEN** the local PR caller references only the instance's LiteLLM workflow,
   omits Bedrock-only setup, and maps the configured endpoint, model, API-key,
   and budget names explicitly
+
+#### Scenario: Generated profile cannot inject child workflow steps
+
+- **WHEN** a generated profile is used to render a child caller
+- **THEN** the caller contains only the trusted provider invocation and explicit
+  mappings, with no profile-supplied workflow step or blanket secret mapping
 
 ### Requirement: Stale caller remediation prints an exact installer command
 

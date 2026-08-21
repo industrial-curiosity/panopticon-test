@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "provider": "bedrock",
+  "credential_mode": "instance-managed",
+  "names": {
+    "secrets": {
+      "instance_token": "PANOPTICON_INSTANCE_TOKEN"
+    },
+    "variables": {
+      "job_timeout_minutes": "PANOPTICON_LLM_JOB_TIMEOUT_MINUTES",
+      "max_attempts": "PANOPTICON_LLM_MAX_ATTEMPTS",
+      "max_correction_attempts": "PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS",
+      "model": "PANOPTICON_LLM_MODEL",
+      "timeout_seconds": "PANOPTICON_LLM_TIMEOUT_SECONDS"
+    }
+  },
+  "default_sources": {
+    "job_timeout_minutes": "workflow-default",
+    "max_attempts": "workflow-default",
+    "max_correction_attempts": "workflow-default",
+    "model": "instance-config",
+    "timeout_seconds": "instance-action"
+  },
+  "defaults": {
+    "model": "amazon.synthetic-model"
+  },
+  "broker": {
+    "action": "example-org/panopticon-broker/.github/actions/aws-credentials@v1.2.3",
+    "region_output": "aws_region"
+  },
+  "identity": {
+    "child_provisioning_reference": "https://example.com/panopticon/child-identity"
+  },
+  "child_identity": {
+    "instructions": "Register each child repository with the approved example broker before provider preflight; the broker must emit only its non-secret region output.",
+    "diagnostic_url": "https://example.com/panopticon/child-identity"
+  },
+  "workflow_access": {
+    "policy": "organization-approved",
+    "diagnostic_url": "https://example.com/panopticon/workflow-access"
+  },
+  "protected_paths": [
+    {
+      "path": ".agents/skills/panopticon-example/SKILL.md",
+      "reason": "The organization keeps a reviewed local onboarding note until the upstream skill supports its policy.",
+      "owner": "example-platform-team",
+      "upstream_replacement": "https://example.com/panopticon/skill-replacement",
+      "last_reconciliation": "2026-01-01: synthetic fixture reviewed",
+      "removal_condition": "Remove after the upstream skill includes the equivalent policy hook."
+    }
+  ]
+}

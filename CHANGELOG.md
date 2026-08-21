@@ -2,6 +2,23 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [add-complex-organization-template] - 2026-08-21
+
+### Added
+
+- Added a stdlib-only organization profile validator and reviewable instance
+  overlay generator for complex provider onboarding.
+- Added concrete direct-OIDC and instance-managed synthetic profiles, generated
+  four-gate onboarding checklists, protection metadata, and bounded overlay
+  application with preflight checks.
+
+### Changed
+
+- Generated callers and configuration continue to use trusted provider
+  contracts, explicit mappings, and provider-derived protection ownership.
+- Profiles now reject attempts to classify template-generated or
+  provider-derived paths as organization debt.
+
 ## [simplify-readme-start-here] - 2026-08-09
 
 ### Changed

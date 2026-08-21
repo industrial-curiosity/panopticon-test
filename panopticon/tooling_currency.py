@@ -187,6 +187,22 @@ def check_skills_and_tooling_drift(child_root=".", instance_root=DEFAULT_INSTANC
     )
 
 
+def protected_path_report(instance_root=DEFAULT_INSTANCE_ROOT):
+    """Describe sync-protected paths by owner without treating the report as a finding."""
+    from .config import load_org_config, protected_path_metadata
+
+    try:
+        metadata = protected_path_metadata(load_org_config(instance_root))
+    except Exception as exc:
+        return (f"protected-path ownership is unavailable: {exc}",)
+    if not metadata:
+        return ("no generated, provider-derived, or organization-declared protected paths",)
+    return tuple(
+        f"{entry['class']} path {entry['path']}: {entry['reason']}"
+        for entry in metadata
+    )
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Advisory-only tooling-currency checks (CI only). Never gates; always exits 0."
@@ -200,6 +216,9 @@ def main(argv=None):
     if ref_finding:
         findings.append(ref_finding)
     findings.extend(check_skills_and_tooling_drift(args.child_root, args.instance_root))
+
+    for protected_path in protected_path_report(args.instance_root):
+        print(f"::notice::Panopticon tooling-currency: {protected_path}")
 
     if not findings:
         print(

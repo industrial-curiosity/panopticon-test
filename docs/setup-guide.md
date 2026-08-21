@@ -371,6 +371,27 @@ them.
 
 ## 3. Org configuration
 
+### Generated complex-organization overlay
+
+Organizations with centralized credential brokering, custom workflow access,
+or per-child identity provisioning can start from the deterministic profile
+workflow. It keeps provider paths and runtime trust in the template registry:
+
+```bash
+python3 -m panopticon.organization_template validate PROFILE
+python3 -m panopticon.organization_template generate PROFILE --instance-root INSTANCE --output OVERLAY
+python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE --check
+python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE
+```
+
+Review the manifest and generated checklists before applying. The overlay
+contains separate instance-wide and child onboarding guidance in four-gate
+order. Apply writes only manifest-declared files; to roll back before commit,
+discard the overlay. After commit, restore the previous reviewed instance files
+through the normal instance change process. See the [complex-organization
+template reference](complex-organization-template.md) for the complete field
+reference and security rules.
+
 `panopticon.config.json` at the instance repo root:
 
 ```json

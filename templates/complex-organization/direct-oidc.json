@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "provider": "bedrock",
+  "credential_mode": "github-oidc",
+  "names": {
+    "secrets": {
+      "instance_token": "PANOPTICON_INSTANCE_TOKEN"
+    },
+    "variables": {
+      "aws_region": "PANOPTICON_AWS_REGION",
+      "aws_role_arn": "PANOPTICON_AWS_ROLE_ARN",
+      "job_timeout_minutes": "PANOPTICON_LLM_JOB_TIMEOUT_MINUTES",
+      "max_attempts": "PANOPTICON_LLM_MAX_ATTEMPTS",
+      "max_correction_attempts": "PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS",
+      "model": "PANOPTICON_LLM_MODEL",
+      "timeout_seconds": "PANOPTICON_LLM_TIMEOUT_SECONDS"
+    }
+  },
+  "default_sources": {
+    "job_timeout_minutes": "workflow-default",
+    "max_attempts": "instance-action",
+    "max_correction_attempts": "workflow-default",
+    "model": "organization-variable",
+    "timeout_seconds": "instance-config"
+  },
+  "defaults": {
+    "timeout_seconds": "90"
+  },
+  "identity": {
+    "role_reference": "arn:aws:iam::123456789012:role/panopticon-example-child",
+    "child_provisioning_reference": "https://example.com/panopticon/child-identity"
+  },
+  "child_identity": {
+    "instructions": "Register each child repository's OIDC subject with the approved example identity service before provider preflight.",
+    "diagnostic_url": "https://example.com/panopticon/child-identity"
+  },
+  "internal_registries": [
+    "packages.example.com"
+  ]
+}
