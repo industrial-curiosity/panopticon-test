@@ -201,7 +201,9 @@ The generator SHALL classify protected paths as template-generated,
 provider-derived, or organization-declared and SHALL expose each path's source
 and reason in the overlay manifest. Selecting Bedrock `instance-managed` mode
 SHALL automatically classify the fixed credential wrapper as provider-derived
-protection without requiring a profile entry or debt record. Every
+protection without requiring a profile entry or debt record. A profile SHALL
+NOT declare a template-generated or provider-derived path as an
+organization-declared protected customization. Every
 organization-declared protected customization SHALL have a debt record with an
 owner, reason, upstream replacement reference, last reconciliation result, and
 removal condition.
@@ -212,6 +214,14 @@ removal condition.
 - **THEN** the manifest classifies the fixed wrapper as provider-derived and no
   owner, upstream replacement, reconciliation result, or removal condition is
   required for that wrapper
+
+#### Scenario: Derived path cannot be reclassified as organization debt
+
+- **GIVEN** a profile selects a provider-derived credential wrapper or a
+  template-generated protected path
+- **WHEN** it also declares that same path in `protected_paths`
+- **THEN** validation rejects the `protected_paths` entry before generating an
+  overlay, manifest, or debt record
 
 #### Scenario: Organization customization has complete debt metadata
 

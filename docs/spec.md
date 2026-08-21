@@ -38,6 +38,15 @@ tokens are also required for private instances.
 
 ## Provider configuration
 
+The public template also provides `panopticon.organization_template`, a
+stdlib-only profile validator and review-first overlay generator. It resolves
+profiles through the trusted provider registry, renders only accepted instance
+configuration fields, records compatibility revisions in an overlay manifest,
+and keeps the fixed instance-managed credential wrapper provider-derived. Its
+generated instance and child checklists preserve the four-gate order and keep
+instance-wide setup separate from per-child identity provisioning. Apply
+preflights destination digests and writes only declared files.
+
 An instance starts without an implicit LLM provider. Its maintainer runs exactly
 one fixed-provider manual
 workflow:

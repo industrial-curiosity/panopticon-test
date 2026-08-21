@@ -40,6 +40,11 @@ Equivalent GitHub CLI commands (run exactly one):
 
 Then rerun child bootstrap from inside the child repository clone:
   {child_bootstrap_command(instance)}
+
+For a profile-driven setup, validate the reviewed profile and overlay before
+running this recovery:
+  python3 -m panopticon.organization_template validate PROFILE
+  python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE --check
 """
 
 
@@ -57,7 +62,7 @@ def missing_provider_recovery(instance, provider, missing):
             "- Scope: the provider contract is instance-wide; the generated caller mapping is per child.",
             "- Evidence: one or more required configured names were absent before provider preflight.",
             "",
-            "Fix location: run the matching provider configuration workflow in the instance, or regenerate this child caller if the contract is stale. Then rerun:",
+            "Fix location: run the matching provider configuration workflow in the instance, or regenerate this child caller if the contract is stale. For a generated profile, validate and review its overlay first. Then rerun:",
             "",
             "~~~bash",
             child_bootstrap_command(instance),
@@ -80,7 +85,7 @@ def stale_caller_recovery(instance):
             "- Scope: the provider contract is instance-wide; the generated caller compatibility revision is per child.",
             "- Evidence: the caller revision does not match the checked-out instance configuration.",
             "",
-            "Fix location: run this from inside the child clone:",
+            "Fix location: run this from inside the child clone, or validate the generated profile before regenerating the caller:",
             "",
             "~~~bash",
             child_bootstrap_command(instance),
@@ -129,6 +134,7 @@ def credential_action_recovery(instance, child_repository, action_path=INSTANCE_
             "~~~",
             "",
             "After the registration and any caller update are complete, rerun or await the child PR workflow. Gate 3 is proven when the credential step succeeds and the caller identity check reports the expected child identity before provider preflight.",
+            "For generated profiles, the overlay manifest identifies this wrapper as provider-derived; do not add it to the organization debt register.",
             "",
         ]
     )

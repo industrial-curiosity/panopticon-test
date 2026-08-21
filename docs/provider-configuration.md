@@ -50,6 +50,24 @@ before provider preflight.
    required missing organization settings separately from optional values
    supplied by a default.
 
+### Generate a reviewed provider profile
+
+For centralized organization setup, use the profile generator so the same
+trusted provider contract validates names and non-secret defaults:
+
+```bash
+python3 -m panopticon.organization_template validate PROFILE
+python3 -m panopticon.organization_template generate PROFILE --instance-root INSTANCE --output OVERLAY
+python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE --check
+python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE
+```
+
+The generated configuration does not persist provider or caller revisions; the
+review manifest records them. After applying and committing the instance
+overlay, run the child bootstrap command above for each child and review its
+explicit caller mappings. Do not put credential values in a profile, overlay,
+or caller.
+
 ## Instance-configured defaults
 
 Each provider configuration workflow has optional non-secret fields for request

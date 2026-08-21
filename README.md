@@ -26,7 +26,10 @@ To get started:
 1. Create a private instance from this template.
 2. Configure its LLM provider by following the [provider-configuration
    guide](docs/provider-configuration.md).
-3. Initialize each child repository with the public launcher, run from that
+3. For an organization with centralized credentials or custom access policy,
+   generate a reviewed instance overlay with the [complex-organization
+   template guide](docs/complex-organization-template.md).
+4. Initialize each child repository with the public launcher, run from that
    repository:
 
 ```bash
@@ -110,6 +113,7 @@ work from both the child and instance repositories.
 
 - [Set up an organization instance](docs/setup-guide.md)
 - [Configure provider defaults](docs/provider-configuration.md)
+- [Generate a complex-organization instance overlay](docs/complex-organization-template.md)
 - [Contribution guidelines](CONTRIBUTING.md)
 - [Contribute a parser](docs/parser-contribution.md)
 - [Use interface and dependency hints](docs/hint-reference.md)

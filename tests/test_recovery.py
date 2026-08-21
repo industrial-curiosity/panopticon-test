@@ -63,7 +63,11 @@ class TestRecoveryOutput(unittest.TestCase):
             "Then rerun child bootstrap from inside the child repository clone:\n"
             "  curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/"
             "panopticon-ay-eye/main/install.py | "
-            "PANOPTICON_INSTANCE='acme/private-instance' python3\n",
+            "PANOPTICON_INSTANCE='acme/private-instance' python3\n\n"
+            "For a profile-driven setup, validate the reviewed profile and overlay before\n"
+            "running this recovery:\n"
+            "  python3 -m panopticon.organization_template validate PROFILE\n"
+            "  python3 -m panopticon.organization_template apply OVERLAY --instance-root INSTANCE --check\n",
         )
 
     def test_missing_provider_recovery_names_missing_values_and_exact_command(self):
@@ -96,7 +100,7 @@ class TestRecoveryOutput(unittest.TestCase):
             "- Expected resource: the current caller-compatible provider revision in `acme/instance` and this child caller\n"
             "- Scope: the provider contract is instance-wide; the generated caller compatibility revision is per child.\n"
             "- Evidence: the caller revision does not match the checked-out instance configuration.\n\n"
-            "Fix location: run this from inside the child clone:\n\n"
+            "Fix location: run this from inside the child clone, or validate the generated profile before regenerating the caller:\n\n"
             "~~~bash\n"
             "curl -fsSL https://raw.githubusercontent.com/industrial-curiosity/"
             "panopticon-ay-eye/main/install.py | PANOPTICON_INSTANCE='acme/instance' python3\n"
