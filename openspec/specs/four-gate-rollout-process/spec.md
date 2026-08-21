@@ -13,7 +13,9 @@ four gates: reusable-workflow access, effective provider configuration,
 caller-repository identity and credentials, and real provider-request
 compatibility. For each gate it SHALL state the observable symptom,
 authoritative evidence, ownership boundary, exact recovery action, and proof
-required to advance.
+required to advance. Generated instance and child onboarding guides SHALL
+preserve this sequence and SHALL distinguish instance-wide access/configuration
+from per-child identity provisioning.
 
 #### Scenario: Maintainer locates the last proven gate
 
@@ -27,6 +29,13 @@ required to advance.
   identity, credentials, or provider request shape
 - **THEN** the guide names the authoritative evidence and whether the repair is
   instance-wide or specific to the child repository
+
+#### Scenario: Generated guidance separates ownership
+
+- **WHEN** an organization generates onboarding guidance for a new child
+- **THEN** instance-wide workflow access and provider configuration are shown
+  separately from child-specific caller identity and credential provisioning,
+  with proof required at each boundary
 
 ### Requirement: Private workflow access has a pre-child check
 

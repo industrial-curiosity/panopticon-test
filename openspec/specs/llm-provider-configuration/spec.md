@@ -552,6 +552,12 @@ instance-configured caller default. The configuration-action summary SHALL
 describe the fixed Action, instance-default, and workflow-default sources as
 applying to optional request-budget variables, and SHALL separately state that
 job timeout uses only the organization variable or reusable-workflow fallback.
+Generated organization profiles SHALL resolve through this same validated
+contract and SHALL not introduce a second default or provider-resolution path.
+Generated `panopticon.config.json` content SHALL contain only accepted
+instance-configuration fields. Computed provider and caller revisions SHALL be
+reported in generated review metadata rather than persisted in instance
+provider configuration.
 
 #### Scenario: Timeout fallback changes without caller regeneration
 
@@ -567,3 +573,16 @@ job timeout uses only the organization variable or reusable-workflow fallback.
 - **THEN** it describes request-budget source precedence separately from
   `job_timeout_minutes` and identifies the reusable workflow as the timeout
   fallback owner
+
+#### Scenario: Generated profile uses the trusted default source
+
+- **WHEN** a generated profile declares an effective optional value and its
+  default source
+- **THEN** configuration validation resolves that value through the existing
+  provider contract before preflight and rejects an absent promised default
+
+#### Scenario: Generated configuration does not persist computed revisions
+
+- **WHEN** a generated profile resolves a provider contract
+- **THEN** its review manifest reports the computed revisions while its
+  `panopticon.config.json` remains valid for the existing configuration loader
