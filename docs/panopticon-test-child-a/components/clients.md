@@ -1,43 +1,41 @@
+---
+type: component
+---
+
 # clients
 
 ## Responsibility
 
-Outbound HTTP clients for the Orders, warehouse, and order-processing-status endpoints. Each
-client is a thin `httpx`-based wrapper with no retry, caching, or circuit-breaking logic. They
-are not called from another component in this repository currently (see
-[architecture.md](../architecture.md#data-flow)).
+The `clients` component provides synchronous HTTP clients for the orders API, order-processing
+service, and warehouse ERP. Each helper creates an `httpx.Client`, calls a fixed relative path,
+raises for unsuccessful HTTP status codes, and returns decoded response data.
 
 ## Interfaces
 
-- **`orders-api`** (`rest`) — consumed via `inventory/clients/orders.py`. See
-  [interfaces.md](../interfaces.md#orders-api).
-- **`warehouse-erp`** (`rest`) — consumed here. Its owner is not established by local source.
-  See [interfaces.md](../interfaces.md#warehouse-erp).
-- **`order-processing-status`** (`rest`) — consumed here via the status endpoint. Its owner is
-  not established by local source. See
-  [interfaces.md](../interfaces.md#order-processing-status).
+The component consumes `orders-api`, `order-processing-api`, and `warehouse-erp`. See
+[interfaces.md](../interfaces.md) for the canonical names and source files.
 
 ## Key modules
 
-- `inventory/clients/orders.py` — `get_order(order_id)` and `list_orders(status=None)` against
-  the orders service.
-- `inventory/clients/erp.py` — `get_warehouse_stock(sku)` and
-  `request_replenishment(sku, quantity)` against the warehouse ERP.
-- `inventory/clients/order_processing.py` — `get_processing_status(order_id)` against an
-  order-processing status endpoint.
+- `inventory/clients/orders.py` — gets one order or lists orders from `orders-api`.
+- `inventory/clients/order_processing.py` — gets processing status from
+  `order-processing-api`.
+- `inventory/clients/erp.py` — reads warehouse stock and requests replenishment from
+  `warehouse-erp`.
 
 ## Configuration
 
-- `ORDERS_API_URL` — base URL for the orders service REST API. Required (read at import time in
-  `orders.py`; missing value raises `KeyError` on import).
-- `WAREHOUSE_ERP_URL` — base URL for the warehouse endpoint. Required (read at import time in
-  `erp.py`; missing value raises `KeyError` on import).
-- `ORDER_PROCESSING_URL` — base URL for the order-processing status endpoint. Required (read at
-  import time in `order_processing.py`; missing value raises `KeyError` on import).
+The following environment variables are required when their modules are imported:
+
+- `ORDERS_API_URL` — base URL for `orders-api`.
+- `ORDER_PROCESSING_URL` — base URL for `order-processing-api`.
+- `WAREHOUSE_ERP_URL` — base URL for `warehouse-erp`.
+
+No client timeout, retry, authentication, or feature-flag configuration is declared in these
+modules.
 
 ## Failure modes
 
-All three clients call `response.raise_for_status()`, so any non-2xx response from any upstream
-raises an `httpx.HTTPStatusError`. None of them catch or retry — failures propagate directly to
-the caller. All `_URL` environment variables are read at module import time, so a missing variable
-fails at import rather than at call time.
+Missing environment variables fail during module import. HTTP transport failures and unsuccessful
+responses propagate from `httpx`; the code does not add retries or local fallback behavior. No
+logging or metrics are emitted by these clients.

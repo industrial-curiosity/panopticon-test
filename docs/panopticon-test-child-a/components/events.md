@@ -1,33 +1,33 @@
+---
+type: component
+---
+
 # events
 
 ## Responsibility
 
-Consumes the `order-events` Kafka topic and dispatches order lifecycle messages
-(`order.created`, `order.cancelled`) to handler functions. The handlers themselves are currently
-empty stubs — this component defines the subscription and dispatch shape, not yet the inventory
-side effects. Not called from, and does not call, any other component in this repo.
+The `events` component consumes the `order-events` Kafka topic. It creates a consumer in the
+`inventory-service` group, polls continuously, and dispatches `order.created` and
+`order.cancelled` messages to local handlers.
 
 ## Interfaces
 
-- **`order-events`** (`kafka`) — consumed here; no owner is established in the local index. See
-  [interfaces.md](../interfaces.md#order-events).
+The component consumes `order-events`. See [interfaces.md](../interfaces.md) for the indexed entry.
 
 ## Key modules
 
-- `inventory/events/kafka_consumer.py` — `build_consumer()` constructs a `confluent_kafka.Consumer`
-  in group `inventory-service`; `run()` polls the `order-events` topic in a loop and calls
-  `handle_order_event()`, which routes `order.created` to `_on_order_created` and
-  `order.cancelled` to `_on_order_cancelled` (both currently `pass`). No entrypoint script in this
-  repo invokes `run()`.
+- `inventory/events/kafka_consumer.py` — configures the Kafka consumer, subscribes to the topic,
+  polls messages, and dispatches recognized event types.
 
 ## Configuration
 
-- `KAFKA_BOOTSTRAP_SERVERS` — Kafka bootstrap server addresses. Required (read at import time;
-  missing value raises `KeyError` on import).
+- `KAFKA_BOOTSTRAP_SERVERS` is required at import time and supplies the Kafka bootstrap servers.
+- The topic name is the source constant `order-events`.
+- The consumer group is the source constant `inventory-service`.
+- Polling uses a one-second timeout and starts from the earliest offset when no offset exists.
 
 ## Failure modes
 
-`run()` re-raises any Kafka error other than a partition-EOF condition, which stops the consume
-loop. Message deserialization (`json.loads`) is unguarded — a malformed message body raises and
-propagates out of the loop. Since the handlers are stubs, no inventory-side failure mode exists
-yet.
+Missing `KAFKA_BOOTSTRAP_SERVERS` fails during import. Kafka errors other than partition EOF raise
+an exception and end the loop; the consumer is closed in the `finally` block. The two event
+handlers currently have no implementation. No logging, metrics, or alert configuration is present.

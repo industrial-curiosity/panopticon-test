@@ -1,29 +1,30 @@
+---
+type: component
+---
+
 # db
 
 ## Responsibility
 
-Read access to the product catalog database: fetching a single product by SKU, listing products,
-and searching products by name or SKU. Does not write to the database (no insert/update/delete
-statements). Not called from any other component in this repo currently.
+The `db` component provides catalog queries against the product catalog database. It opens a
+PostgreSQL connection with `RealDictCursor` and exposes helpers to fetch one product, list products,
+or search products by name or SKU.
 
 ## Interfaces
 
-- **`product-catalog-db`** (`database`) — consumed here; no owner is established in the local
-  index. See [interfaces.md](../interfaces.md#product-catalog-db).
+The component consumes `product-catalog-db`. See [interfaces.md](../interfaces.md) for the indexed
+entry.
 
 ## Key modules
 
-- `inventory/db/catalog.py` — `get_connection()` opens a `psycopg2` connection with
-  `RealDictCursor`; `get_product(sku)`, `list_products(limit=100, offset=0)`,
-  `search_products(query)` run read-only queries against a `products` table.
+- `inventory/db/catalog.py` — reads the connection DSN and executes the catalog queries.
 
 ## Configuration
 
-- `CATALOG_DB_DSN` — PostgreSQL DSN for the product catalog RDS instance. Required (read at
-  import time; missing value raises `KeyError` on import).
+`CATALOG_DB_DSN` is required at import time and supplies the PostgreSQL connection string. No
+other database configuration is declared in the module.
 
 ## Failure modes
 
-No error handling around the `psycopg2` calls — connection failures or query errors (bad DSN,
-network, permissions) propagate directly to the caller. Each function opens and closes its own
-connection (no pooling).
+Missing `CATALOG_DB_DSN` fails during import. Connection failures, cursor failures, and SQL errors
+propagate to the caller. The module contains no logging, metrics, retry, or alert configuration.

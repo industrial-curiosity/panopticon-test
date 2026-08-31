@@ -29,7 +29,6 @@
     "inventory-api": [
       {
         "consumer": [],
-        "extracted_by": "llm",
         "owner": {
           "component": "api",
           "repo": "panopticon-test-child-a"
@@ -82,13 +81,12 @@
             ]
           }
         ],
-        "extracted_by": "llm",
         "owner": null,
         "producer": [],
         "type": "kafka"
       }
     ],
-    "order-processing-status": [
+    "order-processing-api": [
       {
         "consumer": [
           {
@@ -143,7 +141,7 @@
         "extracted_by": "llm",
         "owner": null,
         "producer": [],
-        "type": "database"
+        "type": "postgres"
       }
     ],
     "warehouse-erp": [

@@ -25,14 +25,14 @@ graph LR
     repo_resource_order_events_kafka["order-events"]
     repo_panopticon_test_child_b -.-> repo_resource_order_events_kafka
     repo_resource_order_events_kafka -.-> repo_panopticon_test_child_a
-    repo_resource_order_processing_status_rest["order-processing-status"]
-    repo_resource_order_processing_status_rest -.-> repo_panopticon_test_child_a
+    repo_resource_order_processing_api_rest["order-processing-api"]
+    repo_resource_order_processing_api_rest -.-> repo_panopticon_test_child_a
     repo_resource_orders_api_rest["orders-api"]
     class repo_resource_orders_api_rest conflictResource
     repo_panopticon_test_child_a -.-> repo_resource_orders_api_rest
     repo_resource_orders_api_rest -.-> repo_panopticon_test_child_b
-    repo_resource_product_catalog_db_database["product-catalog-db"]
-    repo_resource_product_catalog_db_database -.-> repo_panopticon_test_child_a
+    repo_resource_product_catalog_db_postgres["product-catalog-db"]
+    repo_resource_product_catalog_db_postgres -.-> repo_panopticon_test_child_a
     repo_resource_warehouse_erp_rest["warehouse-erp"]
     repo_resource_warehouse_erp_rest -.-> repo_panopticon_test_child_a
     classDef conflictResource fill:#fee2e2,stroke:#dc2626,color:#b91c1c,font-weight:bold
@@ -44,9 +44,9 @@ graph LR
 | interface | `inventory-api` | rest | produces | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | consumer |
 | interface | `inventory-snapshots` | s3 | produces/consumes | — | — |
 | interface | `order-events` | kafka | consumes | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | owner/producer |
-| interface | `order-processing-status` | rest | consumes | — | — |
+| interface | `order-processing-api` | rest | consumes | — | — |
 | interface | 🔴 **`orders-api`** | rest | produces/consumes | [panopticon-test-child-b](panopticon-test-child-b/architecture.md) | producer |
-| interface | `product-catalog-db` | database | consumes | — | — |
+| interface | `product-catalog-db` | postgres | consumes | — | — |
 | interface | `warehouse-erp` | rest | consumes | — | — |
 
 ## panopticon-test-child-b

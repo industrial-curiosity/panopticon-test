@@ -69,7 +69,6 @@
         },
         "producer": [
           {
-            "extracted_by": "llm",
             "repo": "panopticon-test-child-a",
             "source_files": [
               "inventory/api/openapi.yaml",
@@ -140,7 +139,6 @@
       {
         "consumer": [
           {
-            "extracted_by": "llm",
             "repo": "panopticon-test-child-a",
             "source_files": [
               "inventory/events/kafka_consumer.py"
@@ -161,6 +159,22 @@
           }
         ],
         "type": "kafka"
+      }
+    ],
+    "order-processing-api": [
+      {
+        "consumer": [
+          {
+            "extracted_by": "llm",
+            "repo": "panopticon-test-child-a",
+            "source_files": [
+              "inventory/clients/order_processing.py"
+            ]
+          }
+        ],
+        "owner": null,
+        "producer": [],
+        "type": "rest"
       }
     ],
     "order-processing-queue": [
@@ -191,22 +205,6 @@
           }
         ],
         "type": "sqs"
-      }
-    ],
-    "order-processing-status": [
-      {
-        "consumer": [
-          {
-            "extracted_by": "llm",
-            "repo": "panopticon-test-child-a",
-            "source_files": [
-              "inventory/clients/order_processing.py"
-            ]
-          }
-        ],
-        "owner": null,
-        "producer": [],
-        "type": "rest"
       }
     ],
     "orders-api": [
@@ -253,7 +251,7 @@
         ],
         "owner": null,
         "producer": [],
-        "type": "database"
+        "type": "postgres"
       }
     ],
     "shipping-provider-api": [

@@ -1,29 +1,31 @@
+---
+type: component
+---
+
 # queue
 
 ## Responsibility
 
-Owns the `fulfillment-queue` SQS queue used to hand off async fulfillment tasks: enqueueing a
-task, polling for tasks, and deleting a task once processed. Not called from any other component
-in this repo currently (see [architecture.md](../architecture.md#data-flow)).
+The `queue` component sends fulfillment tasks to, receives tasks from, and deletes tasks on the
+`fulfillment-queue` SQS interface. Messages contain an order ID and item list encoded as JSON.
 
 ## Interfaces
 
-- **`fulfillment-queue`** (`sqs`) — owned/produced and consumed here (this repo both enqueues and
-  polls/deletes its own queue). See [interfaces.md](../interfaces.md#fulfillment-queue).
+The component both produces and consumes `fulfillment-queue`. See
+[interfaces.md](../interfaces.md) for the indexed entry.
 
 ## Key modules
 
-- `inventory/queue/fulfillment_queue.py` — `enqueue_fulfillment_task(order_id, items)`,
-  `poll_fulfillment_tasks(max_messages=10)`, `delete_fulfillment_task(receipt_handle)`, all
-  against a single SQS queue via a module-level `boto3` client.
+- `inventory/queue/fulfillment_queue.py` — creates the SQS client, sends and receives messages,
+  and deletes a message by receipt handle.
 
 ## Configuration
 
-- `FULFILLMENT_QUEUE_URL` — SQS queue URL for fulfillment tasks. Required (read at import time;
-  missing value raises `KeyError` on import).
+`FULFILLMENT_QUEUE_URL` is required at import time and supplies the SQS queue URL. The receive
+helper requests up to ten messages and waits up to five seconds for messages when called with its
+default arguments.
 
 ## Failure modes
 
-No error handling around the `boto3` SQS calls — any AWS/SQS error (throttling, permissions,
-network) propagates directly to the caller. `poll_fulfillment_tasks` blocks for up to 5 seconds
-(`WaitTimeSeconds=5`) per call when the queue is empty.
+Missing `FULFILLMENT_QUEUE_URL` fails during import. Boto3 client and SQS operation failures
+propagate to the caller. No logging, metrics, retry policy, or alert configuration is declared.
