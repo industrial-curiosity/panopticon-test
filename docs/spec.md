@@ -137,6 +137,19 @@ organization-managed credentials may require per-child provisioning. The
 instance setup guide records the authoritative evidence, owner, recovery, and
 proof for each gate.
 
+## Workflow summaries and template validation
+
+Every shipped GitHub Actions job with executable steps begins by appending a
+`## Job purpose` section and one brief, non-sensitive sentence describing its
+intended action to `GITHUB_STEP_SUMMARY`. Existing success, failure, and recovery
+details follow that preamble. Caller-only jobs that delegate with `uses:` have no
+steps and inherit the summary responsibility from the invoked reusable job.
+
+The template-validation workflow's validation job is created only when
+`github.repository` exactly equals `industrial-curiosity/panopticon-ay-eye`.
+Template-derived instance repositories may retain the workflow file, but their
+instances skip checkout, workflow-contract validation, and template tests.
+
 ## Evaluation and synchronization
 
 Child PR callers invoke the selected LiteLLM, OpenAI, or Bedrock evaluation workflow with

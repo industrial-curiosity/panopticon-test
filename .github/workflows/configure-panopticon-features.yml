@@ -24,6 +24,15 @@ jobs:
   configure:
     runs-on: ubuntu-latest
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job validates and persists one optional Panopticon feature mode."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out the instance
         uses: actions/checkout@v7.0.1
 

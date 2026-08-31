@@ -2,26 +2,26 @@
 
 ## 1. Scope template validation
 
-- [ ] 1.1 Add the exact canonical-template repository condition to the
+- [x] 1.1 Add the exact canonical-template repository condition to the
   `template-validation.yml` validation job so instances create no runnable
   template-validation job.
-- [ ] 1.2 Extend workflow-contract tests to reject a missing, altered, or
+- [x] 1.2 Extend workflow-contract tests to reject a missing, altered, or
   misplaced template-validation guard.
 
 ## 2. Add workflow-purpose preambles
 
-- [ ] 2.1 Inventory every step-bearing job in shipped GitHub Actions workflows
+- [x] 2.1 Inventory every step-bearing job in shipped GitHub Actions workflows
   and add its brief, non-sensitive purpose preamble as the first summary write.
-- [ ] 2.2 Preserve existing success, failure, and recovery summary content
+- [x] 2.2 Preserve existing success, failure, and recovery summary content
   after each preamble; do not alter provider credentials, caller contracts, or
   gates.
-- [ ] 2.3 Add deterministic tests that require the preamble on every
+- [x] 2.3 Add deterministic tests that require the preamble on every
   step-bearing workflow job and exempt only caller-only reusable-workflow
   delegation jobs.
 
 ## 3. Verify and document
 
-- [ ] 3.1 Run the focused workflow-contract tests and the complete Python test
+- [x] 3.1 Run the focused workflow-contract tests and the complete Python test
   suite.
-- [ ] 3.2 Update README.md and docs/spec.md to reflect any user-facing or
+- [x] 3.2 Update README.md and docs/spec.md to reflect any user-facing or
   architectural changes introduced by this change.

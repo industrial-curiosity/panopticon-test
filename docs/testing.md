@@ -51,6 +51,12 @@ different provider. The credential-free template-validation workflow runs this
 same discovery command and the full Python suite for pull requests, pushes, and
 manual dispatches. Then rerun the command and the full test suite.
 
+`tests/test_workflow_contracts.py` also verifies that template validation is
+guarded to the canonical template repository and that every shipped workflow job
+with executable steps starts its summary with a `## Job purpose` preamble. The
+caller-only reusable-workflow delegation job is the only job shape exempt from
+the preamble check.
+
 ## Four-gate rollout verification
 
 Local checks prove the deterministic parts of the rollout process. They do not

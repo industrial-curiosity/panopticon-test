@@ -105,6 +105,15 @@ jobs:
       PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts }}
       PANOPTICON_INSTANCE_TOKEN: ${{ secrets.instance_token }}
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job evaluates a child pull request against the configured Panopticon instance using Bedrock."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out PR branch
         uses: actions/checkout@v7.0.1
         with:

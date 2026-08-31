@@ -32,6 +32,15 @@ jobs:
       # to sys.path ahead of PYTHONPATH for `-m`/`-c` unless this is set.
       PYTHONSAFEPATH: "1"
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job synchronizes the merged child repository documentation and index with the instance."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out merged default branch
         uses: actions/checkout@v7.0.1
 
