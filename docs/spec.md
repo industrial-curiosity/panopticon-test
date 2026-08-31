@@ -26,6 +26,13 @@ while GitHub still directs them to wait. Users should authenticate every install
 including public-instance installs, to avoid the lower anonymous API quota;
 tokens are also required for private instances.
 
+An uncustomized instance installer loads the template's default bootstrap
+through the public launcher's in-memory synthetic `panopticon` package. The
+loader registers the complete relative-import dependency closure in
+topological order before evaluating bootstrap, including the feature registry;
+this keeps enabled feature packages available without requiring a child
+checkout or a `PYTHONPATH` change.
+
 ## Repository roles
 
 - The public template owns deterministic Python tooling, trusted workflow and

@@ -2,6 +2,15 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [specify-bootstrap-dependency-closure] - 2026-08-31
+
+### Changed
+
+- Default bootstrap payload loading now requires complete relative-import
+  dependency registration in topological order, including the feature registry.
+- Installer regression coverage now uses clean module environments and real
+  dependency source for feature-enabled bootstrap paths.
+
 ## [assert-failure-path-diagnostics] - 2026-08-31
 
 ### Added

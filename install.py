@@ -342,6 +342,16 @@ def _load_default_payload_from_github(instance, ref=None):
         callers.__dict__,
     )
 
+    # Bootstrap imports the feature registry at module scope; register it before evaluation.
+    features = types.ModuleType("panopticon.features")
+    features.__package__ = "panopticon"
+    package.features = features
+    sys.modules["panopticon.features"] = features
+    exec(
+        compile(fetch("panopticon/features.py"), "panopticon/features.py", "exec"),
+        features.__dict__,
+    )
+
     bootstrap = types.ModuleType("panopticon.bootstrap")
     bootstrap.__package__ = "panopticon"
     package.bootstrap = bootstrap

@@ -42,6 +42,19 @@ class ApiResponse(io.BytesIO):
         self.close()
 
 
+@contextlib.contextmanager
+def _isolated_panopticon_modules():
+    saved = {
+        name: sys.modules.pop(name)
+        for name in list(sys.modules)
+        if name == "panopticon" or name.startswith("panopticon.")
+    }
+    try:
+        yield
+    finally:
+        sys.modules.update(saved)
+
+
 def _json_response(document):
     return ApiResponse(json.dumps(document).encode())
 
@@ -351,13 +364,15 @@ class TestDefaultInstancePayload(unittest.TestCase):
         "def caller_workflow_text(*_args, **_kwargs):\n"
         "    return ''\n"
     )
+    FAKE_FEATURES = "FEATURE_MANIFEST_PATH = 'features/manifest.json'\n"
     FAKE_BOOTSTRAP = (
         "from . import SCHEMA_VERSION\n"
         "from .callers import CALLER_WORKFLOWS\n"
         "from .providers import PROVIDERS\n"
+        "from .features import FEATURE_MANIFEST_PATH\n"
         "from .recovery import configuration_recovery\n"
         "def main():\n"
-        "    print(f'DEFAULT_BOOTSTRAP_RAN schema={SCHEMA_VERSION} callers={len(CALLER_WORKFLOWS)} providers={sorted(PROVIDERS)} {configuration_recovery(None, None)}')\n"
+        "    print(f'DEFAULT_BOOTSTRAP_RAN schema={SCHEMA_VERSION} callers={len(CALLER_WORKFLOWS)} providers={sorted(PROVIDERS)} feature_manifest={FEATURE_MANIFEST_PATH} {configuration_recovery(None, None)}')\n"
         "    return 0\n"
     )
 
@@ -374,6 +389,8 @@ class TestDefaultInstancePayload(unittest.TestCase):
                 return _contents_response(self.FAKE_PROVIDERS)
             if "/contents/panopticon/callers.py" in request.full_url:
                 return _contents_response(self.FAKE_CALLERS)
+            if "/contents/panopticon/features.py" in request.full_url:
+                return _contents_response(self.FAKE_FEATURES)
             if "/contents/panopticon/bootstrap.py" in request.full_url:
                 return _contents_response(self.FAKE_BOOTSTRAP)
             raise AssertionError(f"unexpected URL: {request.full_url}")
@@ -393,19 +410,28 @@ class TestDefaultInstancePayload(unittest.TestCase):
                                 INSTALL_SOURCE, "acme/instance", "trunk"
                             )
         self.assertEqual(caught.exception.code, 0)
-        self.assertIn("DEFAULT_BOOTSTRAP_RAN schema=1 callers=1 providers=['test'] recovery", output.getvalue())
-        self.assertEqual(len(requests), 5)
+        self.assertIn(
+            "DEFAULT_BOOTSTRAP_RAN schema=1 callers=1 providers=['test'] "
+            "feature_manifest=features/manifest.json recovery",
+            output.getvalue(),
+        )
+        self.assertEqual(len(requests), 6)
         self.assertLess(
             next(i for i, url in enumerate(requests) if "providers.py" in url),
             next(i for i, url in enumerate(requests) if "bootstrap.py" in url),
         )
+        self.assertLess(
+            next(i for i, url in enumerate(requests) if "features.py" in url),
+            next(i for i, url in enumerate(requests) if "bootstrap.py" in url),
+        )
 
-    def test_current_bootstrap_loads_without_a_python_tooling_manifest(self):
+    def test_current_bootstrap_loads_feature_registry_in_a_clean_module_environment(self):
         source_by_path = {
             "panopticon/__init__.py": self.FAKE_INIT,
             "panopticon/recovery.py": (REPO_ROOT / "panopticon" / "recovery.py").read_text(),
             "panopticon/providers.py": self.FAKE_PROVIDERS,
             "panopticon/callers.py": self.FAKE_CALLERS,
+            "panopticon/features.py": (REPO_ROOT / "panopticon" / "features.py").read_text(),
             "panopticon/bootstrap.py": (REPO_ROOT / "panopticon" / "bootstrap.py").read_text(),
         }
 
@@ -417,9 +443,59 @@ class TestDefaultInstancePayload(unittest.TestCase):
             }
 
         with mock.patch.object(INSTALLER, "_api_json", side_effect=api_json):
-            with mock.patch.dict(sys.modules, {}, clear=False):
+            with _isolated_panopticon_modules():
                 bootstrap_main = INSTALLER._load_default_payload_from_github("acme/instance", "trunk")
         self.assertTrue(callable(bootstrap_main))
+
+    def test_bootstrap_reports_missing_feature_dependency(self):
+        registration = '''    # Bootstrap imports the feature registry at module scope; register it before evaluation.
+    features = types.ModuleType("panopticon.features")
+    features.__package__ = "panopticon"
+    package.features = features
+    sys.modules["panopticon.features"] = features
+    exec(
+        compile(fetch("panopticon/features.py"), "panopticon/features.py", "exec"),
+        features.__dict__,
+    )
+
+'''
+        broken_source = INSTALL_SOURCE.replace(registration, "")
+        self.assertNotEqual(broken_source, INSTALL_SOURCE)
+        source_by_path = {
+            "panopticon/__init__.py": self.FAKE_INIT,
+            "panopticon/recovery.py": self.FAKE_RECOVERY,
+            "panopticon/providers.py": self.FAKE_PROVIDERS,
+            "panopticon/callers.py": self.FAKE_CALLERS,
+            "panopticon/features.py": self.FAKE_FEATURES,
+            "panopticon/bootstrap.py": self.FAKE_BOOTSTRAP,
+        }
+
+        def api_json(url, _token):
+            path = url.split("/contents/", maxsplit=1)[1].split("?", maxsplit=1)[0]
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(source_by_path[path].encode()).decode(),
+            }
+
+        def urlopen(request, timeout=30):
+            del timeout
+            path = request.full_url.split("/contents/", maxsplit=1)[1].split("?", maxsplit=1)[0]
+            return _contents_response(source_by_path[path])
+
+        with mock.patch("urllib.request.urlopen", urlopen):
+            with _isolated_panopticon_modules():
+                with self.assertRaisesRegex(ModuleNotFoundError, "panopticon.features"):
+                    with mock.patch.dict(
+                        os.environ,
+                        {
+                            "PANOPTICON_INSTANCE": "acme/instance",
+                            "PANOPTICON_INSTANCE_REF": "trunk",
+                        },
+                        clear=True,
+                    ):
+                        INSTALLER.execute_instance_installer(
+                            broken_source, "acme/instance", "trunk"
+                        )
 
     def test_invalid_provider_payload_stops_before_bootstrap_execution(self):
         requests = []
