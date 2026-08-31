@@ -1,6 +1,6 @@
 ---
 name: openspec-apply-change
-description: "Implement tasks from an OpenSpec change. Use when the user wants to start implementing, continue implementation, or work through tasks. Require exactly one active change: stop when none exist and ask the user to select when multiple exist."
+description: "Implement tasks from an OpenSpec change when the user explicitly asks to apply, start, continue, or work through tasks. Treat that request as authorization; require exactly one active change, stopping when none exist or asking the user to select when multiple exist."
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -10,6 +10,11 @@ metadata:
 ---
 
 Implement tasks from an OpenSpec change.
+
+An explicit user request to apply or implement a named or uniquely resolved
+active change is authorization to proceed. Do not request a second design
+approval when the change's planning artifacts already define the work; pause
+only for ambiguity, a blocker, or a material scope decision.
 
 **Input**: Optionally specify a change name. Before acting, require exactly one active change.
 

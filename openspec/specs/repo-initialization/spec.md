@@ -957,10 +957,9 @@ The template repo SHALL include a `panopticon-init` skill (name prefix
 `panopticon-`, so the existing
 skill-download step installs it into the child repo automatically with no
 bootstrap script changes) that
-runs the other Phase 2 skills and the Phase 3 finalization command in the
-correct dependency order, from
-a single invocation, while leaving each underlying skill independently invocable
-on its own.
+runs the other Phase 2 skills, enabled feature remediation, and the Phase 3
+finalization command in the correct dependency order from a single invocation,
+while leaving each underlying skill independently invocable on its own.
 
 The order SHALL be:
 
@@ -981,29 +980,26 @@ The order SHALL be:
    dependency shard)
    that those steps build; running doc-generation first has no index to render
    from
-6. The finalization command (`python3 -m panopticon.init_repo --instance
-   <instance>`) — the instance
-   slug SHALL be self-discovered by reading the `uses:` line already wired into
-   `.github/workflows/panopticon-pr.yml`, rather than requiring the user to
-   supply it
+6. Each enabled feature's installed skill, followed by that feature's
+   deterministic validator
+7. The finalization command (`python3 -m panopticon.init_repo --instance
+   <instance>`) — the instance slug SHALL be self-discovered by reading the
+   `uses:` line already wired into `.github/workflows/panopticon-pr.yml`, rather
+   than requiring the user to supply it
 
 `panopticon-init` SHALL maintain a checkpoint log at `panopticon/.init-log.json`
-recording which of the
-six steps have completed. Before starting a step, it SHALL check the log and
-skip any step already
+recording which of the seven steps have completed. Before starting a step, it
+SHALL check the log and skip any step already
 recorded as complete. It SHALL update the log immediately after each step
 completes, so an interrupted
 run — including one resumed in a new agent session with no memory of the prior
 one — continues from the
 first incomplete step rather than restarting from scratch or skipping ahead into
 a step whose
-prerequisites aren't met. Once all six steps have completed and
-`panopticon/config.json` has been
-written, `panopticon-init` SHALL delete the checkpoint log — a completed
-initialization has no further
-use for it, and it SHALL NOT remain in the repo afterward.
+prerequisites aren't met. It SHALL delete the checkpoint only when finalization
+succeeds and no agent-remediable feature finding remains.
 
-Each of the six skills SHALL remain fully usable on its own, independent of
+Each of the skills SHALL remain fully usable on its own, independent of
 `panopticon-init` and of any
 checkpoint log state, for users who want to run a single step directly.
 
@@ -1049,8 +1045,8 @@ checkpoint log state, for users who want to run a single step directly.
 
 #### Scenario: Checkpoint log deleted on successful completion
 
-- **GIVEN** all six steps have completed and `panopticon/config.json` has been
-  written
+- **GIVEN** all seven steps have completed, `panopticon/config.json` has been
+  written, and no agent-remediable feature finding remains
 - **WHEN** `panopticon-init` finishes
 - **THEN** `panopticon/.init-log.json` no longer exists in the repo
 
@@ -1067,6 +1063,20 @@ checkpoint log state, for users who want to run a single step directly.
 - **WHEN** `panopticon-init` reaches the finalization step
 - **THEN** it determines the instance slug by reading the `uses:` line in
   `.github/workflows/panopticon-pr.yml` rather than asking the user for it
+
+#### Scenario: Enabled advisory feature is remediated before finalization
+
+- **GIVEN** the managed feature receipt enables OKF in advisory mode
+- **WHEN** `/panopticon-init` reaches feature remediation
+- **THEN** it invokes the installed OKF skill, repairs deterministic findings,
+  and reruns the OKF validator before finalization
+
+#### Scenario: Advisory feature work remains unresolved
+
+- **GIVEN** an enabled advisory feature still has an agent-remediable finding
+- **WHEN** its validator completes
+- **THEN** `/panopticon-init` retains its checkpoint and reports the feature
+  skill and revalidation command instead of declaring initialization complete
 
 ### Requirement: Initialization orchestration is self-contained
 
@@ -1219,6 +1229,28 @@ include secret values, tokens, or environment-variable values.
 - **WHEN** finalization is run again after remediation
 - **THEN** it overwrites the report with the current outcome and findings and
   does not leave duplicate report files
+
+### Requirement: Finalization preserves advisory feature actions
+
+Finalization SHALL report every enabled advisory feature finding as a `Child
+repository` action item. Each item SHALL name the feature, the affected
+artifact or validation finding, the installed feature skill, and its
+revalidation command. Organization configuration findings SHALL be appended to
+the report without replacing feature action items.
+
+#### Scenario: Advisory feature and organization findings coexist
+
+- **GIVEN** finalization finds an advisory OKF violation and cannot verify an
+  organization Actions setting
+- **WHEN** it writes `panopticon-initialization-report.md`
+- **THEN** the report contains the OKF item under `Child repository` and the
+  verification item under `Organization configuration`
+
+#### Scenario: Advisory feature finding is resolved
+
+- **GIVEN** a previous report listed an advisory feature action
+- **WHEN** the feature validator passes on re-finalization
+- **THEN** the refreshed report omits the resolved feature item
 
 ### Requirement: Org-level CI prerequisites
 

@@ -824,10 +824,12 @@ tool you use — it reads skills from wherever you just installed them):
 
   /panopticon-init
 
-This runs interface naming, interface extraction, documentation
-generation, and finalization in order, resuming from where it left
-off if interrupted. Each step remains invocable on its own by name
-if you'd rather run just one.
+This runs interface naming, interface extraction, dependency naming,
+dependency extraction, documentation generation, enabled-feature
+remediation and finalization in order, resuming from where it left off
+if interrupted. Advisory feature findings are non-blocking for CI but
+remain required agent work. Each step remains invocable on its own by
+name if you'd rather run just one.
 
 Then commit and push:
 

@@ -27,5 +27,8 @@ Run the deterministic validator before finalization:
 python3 -m panopticon.features check --docs-root docs
 ```
 
-Advisory findings are reported for migration. Blocking findings prevent
-initialization or the shared PR gate. CI validates but never rewrites docs.
+Advisory findings are non-blocking for initialization and the shared PR gate,
+but they are required agent remediation: repair deterministic findings and run
+the validator again before declaring initialization complete. Blocking findings
+prevent initialization or the shared PR gate. CI validates but never rewrites
+docs.

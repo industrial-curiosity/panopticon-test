@@ -17,6 +17,13 @@ The report separates child-repository, organization-configuration, and
 template/tooling findings and gives the next action for each; credential values
 are never recorded.
 
+Initialization also reads the managed feature receipt after core documentation
+generation. Each enabled feature's installed skill and deterministic validator
+run before finalization. Advisory findings remain non-blocking for CI and the
+initialization flag, but are retained as child-repository actions with the
+feature skill and revalidation command until resolved; organization-verification
+findings are appended separately.
+
 Initialization is one continuous sequence: before finalization writes the
 configuration file, documentation generation derives its repository, instance,
 and workflow-reference context from the bootstrap caller workflow. GitHub API

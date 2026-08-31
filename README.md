@@ -62,8 +62,10 @@ New children receive only artifacts for enabled features. Bootstrap prompts
 before deleting receipt-owned artifacts when a feature is disabled; non-
 interactive bootstrap and `python3 -m panopticon.sync` remove those exact
 retired paths without staging or committing the deletion. Start OKF in
-`advisory` mode for migration, validate the generated documentation, and move
-to `blocking` when the bundle is clean.
+`advisory` mode for migration: its findings do not block CI, but the installed
+feature skill makes deterministic repairs required agent work before
+initialization is declared complete. Move to `blocking` when the bundle is
+clean.
 
 ## How it works
 
