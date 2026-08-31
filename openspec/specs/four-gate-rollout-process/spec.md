@@ -5,7 +5,9 @@
 Define the supported four-gate operating process for reusable-workflow access,
 effective provider configuration, caller identity and credentials, and real
 provider-request compatibility.
+
 ## Requirements
+
 ### Requirement: Four-gate operating sequence is explicit
 
 Public setup and getting-started guidance SHALL define an ordered sequence of

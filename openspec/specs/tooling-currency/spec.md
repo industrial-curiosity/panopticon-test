@@ -5,7 +5,9 @@
 Define how initialized child repositories detect and refresh managed Panopticon
 skills, vendored tooling, and their workflow alignment with the configured
 instance repository.
+
 ## Requirements
+
 ### Requirement: Workflow-ref alignment check
 
 The PR workflow SHALL determine whether a child repo's wired `panopticon-pr.yml`
