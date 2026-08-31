@@ -15,6 +15,15 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job synchronizes the instance from the fixed Panopticon template."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Prepare local recovery instructions
         shell: bash
         run: |

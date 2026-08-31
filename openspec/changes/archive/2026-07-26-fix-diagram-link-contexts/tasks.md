@@ -1,3 +1,5 @@
+# Diagram link context tasks
+
 ## 1. Documentation-generation contract
 
 - [x] 1.1 Update the child documentation-generation skill and architecture template so child-local links remain document-relative and the architecture back-link uses `panopticon.org_diagram_link` output verbatim.

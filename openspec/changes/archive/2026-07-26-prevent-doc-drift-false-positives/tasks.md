@@ -1,3 +1,5 @@
+# Documentation drift tasks
+
 ## 1. Evidence-backed drift evaluation
 
 - [x] 1.1 Classify PR diffs in `panopticon.drift` and return a clean verdict without an LLM request when only documentation, skills, OpenSpec artifacts, changelogs, or tests changed.

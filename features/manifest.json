@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "features": {
+    "okf": {
+      "modes": [
+        "disabled",
+        "advisory",
+        "blocking"
+      ],
+      "artifacts": [
+        {
+          "source": "okf/SKILL.md",
+          "destination": ".agents/skills/panopticon-feature-okf/SKILL.md"
+        },
+        {
+          "source": "okf/templates/component.md",
+          "destination": ".agents/skills/panopticon-feature-okf/templates/component.md"
+        },
+        {
+          "source": "okf/templates/interface.md",
+          "destination": ".agents/skills/panopticon-feature-okf/templates/interface.md"
+        },
+        {
+          "source": "okf/okf.py",
+          "destination": "panopticon/feature_okf.py"
+        }
+      ]
+    }
+  }
+}

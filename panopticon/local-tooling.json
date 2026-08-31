@@ -4,6 +4,7 @@
     "__init__.py",
     "callers.py",
     "config.py",
+    "features.py",
     "providers.py",
     "dependencies.py",
     "docs.py",

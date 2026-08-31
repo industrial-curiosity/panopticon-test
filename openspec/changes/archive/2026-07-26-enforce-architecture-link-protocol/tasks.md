@@ -1,3 +1,5 @@
+# Architecture link protocol tasks
+
 ## 1. Link protocol enforcement
 
 - [x] 1.1 Update `panopticon-doc-generation` guidance so architecture-overview

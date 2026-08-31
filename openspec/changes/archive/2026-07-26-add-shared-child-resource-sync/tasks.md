@@ -1,3 +1,5 @@
+# Shared child resource-sync tasks
+
 ## 1. Shared resource-sync workflow
 
 - [x] 1.1 Add the template-owned reusable child resource-sync workflow with

@@ -11,8 +11,18 @@ permissions:
 jobs:
   validate:
     name: Validate template
+    if: github.repository == 'industrial-curiosity/panopticon-ay-eye'
     runs-on: ubuntu-latest
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job validates the template's workflow contracts and Python test suite."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7.0.1
 
       - name: Validate reusable workflow contracts

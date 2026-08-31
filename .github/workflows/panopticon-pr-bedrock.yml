@@ -105,10 +105,46 @@ jobs:
       PANOPTICON_LLM_MAX_CORRECTION_ATTEMPTS: ${{ inputs.max_correction_attempts }}
       PANOPTICON_INSTANCE_TOKEN: ${{ secrets.instance_token }}
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job evaluates a child pull request against the configured Panopticon instance using Bedrock."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out PR branch
         uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Warn about pinned workflow ref currency
+        shell: python
+        env:
+          CONFIGURED_WORKFLOW_REF: ${{ inputs.workflow_ref }}
+        run: |
+          import os
+          import re
+          from pathlib import Path
+
+          caller = Path(".github/workflows/panopticon-pr.yml")
+          if not caller.is_file():
+              raise SystemExit(0)
+          match = re.search(r"^\s*uses:\s*\S+/.github/workflows/\S+@([^\s]+)\s*$", caller.read_text(), re.MULTILINE)
+          actual = match.group(1) if match else None
+          configured = os.environ["CONFIGURED_WORKFLOW_REF"]
+          if actual and actual != configured:
+              message = (
+                  "## Panopticon caution: pinned workflow ref differs\n\n"
+                  f"The child caller uses `{actual}`; the instance configured current ref is `{configured}`.\n\n"
+                  "This warning is advisory. Refresh the child from its repository with "
+                  "`python3 -m panopticon.sync` (or rerun bootstrap), review and commit the generated caller, "
+                  "then push the child change. Panopticon does not infer a latest tag.\n\n"
+              )
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write(message)
+              print(f"::warning::Panopticon caller ref {actual} differs from instance current ref {configured}")
 
       # Skip-and-instruct: an uninitialized repo fails this check with the init procedure and
       # every later Panopticon check is skipped. Org gating is unreadable without the config
@@ -442,6 +478,28 @@ jobs:
           git diff "origin/${{ github.base_ref }}...HEAD" -- ':!.panopticon-instance' > /tmp/panopticon-pr.diff
           mkdir -p /tmp/panopticon-reports
 
+      - name: Run enabled feature checks
+        id: features
+        if: steps.init.outputs.initialized == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          PYTHONPATH="$GITHUB_WORKSPACE/$PANOPTICON_INSTANCE_DIR" \
+            python3 -m panopticon.features check --root "$PANOPTICON_INSTANCE_DIR" --docs-root "$PANOPTICON_DOCS"
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "PANOPTICON_FEATURE_GATE=blocking-failed" >> "$GITHUB_ENV"
+          elif [ "$status" -ne 0 ]; then
+            echo "PANOPTICON_FEATURE_GATE=operational-failed" >> "$GITHUB_ENV"
+            {
+              echo "## Panopticon feature check could not run"
+              echo
+              echo "Fix location: refresh the instance feature package and rerun the child bootstrap or sync command."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       # Advisory-only tooling-currency checks (tooling-currency capability): warns when the child's
       # wired workflow ref or downloaded skills/vendored tooling have drifted from the instance
       # repo's current default branch. Deterministic, no LLM call, no network calls beyond the
@@ -730,6 +788,11 @@ jobs:
           failed=""
           warn() { echo "::warning::$1"; }
           fail() { failed="$failed$1\n"; echo "::error::$1"; }
+          if [ "${PANOPTICON_FEATURE_GATE:-}" = "blocking-failed" ]; then
+            fail "Panopticon blocking feature check found documentation violations"
+          elif [ "${PANOPTICON_FEATURE_GATE:-}" = "operational-failed" ]; then
+            fail "Panopticon feature check could not run; see the step summary"
+          fi
           # An operational failure is never advisory — a check that could not run has told the
           # developer nothing they can act on, regardless of that check's own gating configuration.
           if [ "${{ steps.drift.outputs.error }}" = "true" ]; then

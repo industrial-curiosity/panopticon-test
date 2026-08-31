@@ -13,5 +13,17 @@
       "line_length": 500,
       "tables": false
     }
-  }
+  },
+  "overrides": [
+    {
+      "filter": [
+        "CHANGELOG.md",
+        "openspec/**/*.md"
+      ],
+      "config": {
+        "MD024": false
+      },
+      "combine": "merge"
+    }
+  ]
 }
