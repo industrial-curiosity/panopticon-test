@@ -97,6 +97,14 @@ private sandbox record, not in this public test documentation.
   org-diagram link from the bootstrap caller workflow, plus its explicit
   recovery guidance when that workflow is absent.
 
+## Default payload loading
+
+`tests/test_install_self_bootstrap.py` verifies that the public launcher loads
+the default bootstrap's provider and feature-registry dependencies in a clean
+module environment using real source, and asserts the named
+`panopticon.features` failure when that registration is omitted. The test uses
+stubbed GitHub Contents responses and has no network dependency.
+
 ## Suite layout
 
 | Module | Covers |
