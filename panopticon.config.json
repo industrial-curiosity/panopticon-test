@@ -1,4 +1,9 @@
 {
+  "features": {
+    "okf": {
+      "mode": "advisory"
+    }
+  },
   "gating": {
     "doc-drift": "blocking",
     "init": "blocking",
