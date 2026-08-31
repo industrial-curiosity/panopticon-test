@@ -2,6 +2,31 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [add-instance-feature-packages] - 2026-08-31
+
+### Added
+
+- Added template-owned optional feature packages with disabled, advisory, and
+  blocking modes, validated instance configuration, artifact receipts, and
+  safe disabled-feature cleanup.
+- Added the opt-in OKF documentation feature, including constrained frontmatter
+  validation, generation support, indexes, and workflow enforcement.
+
+### Changed
+
+- Bootstrap, sync, and shared PR workflows now select feature artifacts and
+  checks from trusted instance configuration and report stale pinned workflow
+  refs without blocking.
+
+## [guard-template-validation-and-standardize-summaries] - 2026-08-31
+
+### Added
+
+- Template validation now runs only in the canonical Panopticon template
+  repository.
+- Executable workflow jobs now begin step summaries with a concise purpose
+  preamble, with deterministic coverage tests for both workflow contracts.
+
 ## [add-complex-organization-template] - 2026-08-21
 
 ### Added

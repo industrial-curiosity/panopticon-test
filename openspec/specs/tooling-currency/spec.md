@@ -143,7 +143,10 @@ The script SHALL preserve protected child paths, including
 files. It SHALL create or refresh Panopticon-managed caller workflows from the
 single shared caller contract and SHALL NOT overwrite or delete unrecognized
 child workflow files. The script SHALL NOT delete any child-repository file,
-including a managed resource that no longer exists in the instance source.
+including a managed resource that no longer exists in the instance source,
+except exact receipt-owned artifacts retired by a disabled instance feature.
+It SHALL delete those retired feature artifacts noninteractively, report each
+deleted path, update the receipt, and never stage, commit, or push a deletion.
 
 Given a `--check-updates` flag, the script SHALL run as a pure dry run: it SHALL
 report every directory-derived resource that would change or be protected, using
@@ -172,16 +175,24 @@ content-based comparison, and SHALL NOT write any file.
 #### Scenario: Removed instance resource remains in the child repository
 
 - **GIVEN** a file previously synchronized into a managed directory is no
-  longer present in the instance source
+  longer present in the instance source and is not a receipt-owned retired
+  feature artifact
 - **WHEN** local sync runs
 - **THEN** it does not delete that child file
+
+#### Scenario: Disabled feature artifact is removed
+
+- **GIVEN** a valid feature receipt identifies an OKF helper that the effective
+  instance configuration no longer selects
+- **WHEN** local sync runs without flags
+- **THEN** it deletes that helper, reports the deleted path, and leaves
+  unrelated child files untouched
 
 #### Scenario: --check-updates writes nothing
 
 - **WHEN** the sync script is run with `--check-updates`
-- **THEN** it reports which files would change and exits without writing,
-  modifying, or deleting any
-  file in the child repo
+- **THEN** it reports which files would change or be removed and exits without
+  writing or deleting any file
 
 #### Scenario: Nothing to sync
 
