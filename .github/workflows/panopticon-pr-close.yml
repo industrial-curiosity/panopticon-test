@@ -18,6 +18,15 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job cleans up Panopticon state after a child pull request closes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Check out repo (for panopticon/config.json)
         uses: actions/checkout@v7.0.1
 

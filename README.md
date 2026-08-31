@@ -48,6 +48,23 @@ setup guide](docs/setup-guide.md). After initialization, review the child
 repository's `panopticon-initialization-report.md` and follow any actions it
 lists.
 
+## Optional instance features
+
+Optional capabilities are selected by the instance maintainer from the
+template-owned `features/manifest.json` registry. Open the instance's
+[Configure Panopticon — Features workflow](https://github.com/YOUR-ORG/YOUR-INSTANCE-REPO/actions/workflows/configure-panopticon-features.yml)
+with `YOUR-ORG` and `YOUR-INSTANCE-REPO` replaced by the real instance
+repository, then choose a feature such as `okf` and one of `disabled`,
+`advisory`, or `blocking`. The workflow accepts identifiers and modes only; it
+does not accept secret values or arbitrary artifact paths.
+
+New children receive only artifacts for enabled features. Bootstrap prompts
+before deleting receipt-owned artifacts when a feature is disabled; non-
+interactive bootstrap and `python3 -m panopticon.sync` remove those exact
+retired paths without staging or committing the deletion. Start OKF in
+`advisory` mode for migration, validate the generated documentation, and move
+to `blocking` when the bundle is clean.
+
 ## How it works
 
 Panopticon has three repository roles:
@@ -129,6 +146,7 @@ work from both the child and instance repositories.
 - `interfaces/` and `dependencies/` — organization-wide indexes populated in an
   instance.
 - `docs/` — setup, contribution, and reference documentation.
+- `features/` — the versioned registry and template-owned optional feature packages.
 - `.agents/skills/` — skills used by local agents and CI.
 
 For configuration details, supported providers, sync protection rules, and

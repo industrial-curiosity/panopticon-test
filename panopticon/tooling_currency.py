@@ -165,6 +165,56 @@ def _diff_files(instance_files, child_files):
     return findings
 
 
+def _feature_files(instance_root, child_root):
+    """Compare selected feature artifacts and report receipt-owned retired paths."""
+    from .config import load_org_config
+    from .features import FeatureConfigError, load_manifest, load_receipt, selected_artifacts, retired_artifacts, validate_feature_config
+
+    if not (Path(instance_root) / "features" / "manifest.json").is_file():
+        return []
+    try:
+        org_config = load_org_config(instance_root)
+        manifest = load_manifest(instance_root)
+        modes = validate_feature_config(org_config.get("features"), manifest)
+        receipt = load_receipt(child_root, manifest)
+    except FeatureConfigError as exc:
+        return [f"feature artifact state is unavailable: {exc}"]
+    if "features" not in org_config:
+        return []
+    selected = selected_artifacts(manifest, modes)
+    instance_files = {
+        entry["destination"]: Path(instance_root) / "features" / entry["source"]
+        for entry in selected
+    }
+    child_files = {
+        destination: Path(child_root) / destination
+        for destination in instance_files
+    }
+    findings = _diff_files(instance_files, child_files)
+    previous = receipt or {"artifacts": []}
+    retired = retired_artifacts(
+        previous,
+        [
+            {"feature": entry["feature"], "destination": entry["destination"]}
+            for entry in selected
+        ],
+    )
+    findings.extend(
+        f"{entry['destination']} is retired by the current disabled feature {entry['feature']}"
+        for entry in retired
+        if (Path(child_root) / entry["destination"]).exists()
+    )
+    pending = {
+        entry["destination"] for entry in (receipt or {}).get("pending_removals", [])
+    }
+    findings.extend(
+        f"{destination} remains pending cleanup"
+        for destination in sorted(pending)
+        if (Path(child_root) / destination).exists()
+    )
+    return findings
+
+
 def check_skills_and_tooling_drift(child_root=".", instance_root=DEFAULT_INSTANCE_ROOT):
     """Skills/tooling drift check (design D2): plain recursive content diff between the instance
     checkout's ``panopticon-*`` skills and vendored local-tooling modules and the child repo's own
@@ -182,8 +232,11 @@ def check_skills_and_tooling_drift(child_root=".", instance_root=DEFAULT_INSTANC
         return findings + [manifest_error]
     instance_tooling = _tooling_module_files(instance_root, modules)
     child_tooling = _tooling_module_files(child_root, modules)
-    return findings + _diff_files(instance_tooling, child_tooling) + _unmanaged_tooling_findings(
-        child_root, instance_root, modules
+    return (
+        findings
+        + _diff_files(instance_tooling, child_tooling)
+        + _unmanaged_tooling_findings(child_root, instance_root, modules)
+        + _feature_files(instance_root, child_root)
     )
 
 

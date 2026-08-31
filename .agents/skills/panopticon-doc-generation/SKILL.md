@@ -73,7 +73,20 @@ components that no longer exist.
    python3 -m panopticon.docs validate --docs-root <docs-location>
    ```
 
-7. **Draw the architecture diagram grounded in the actual code.** The `## Architecture diagram`
+7. **Honor the effective OKF feature mode.** When bootstrap has installed the
+   `panopticon-feature-okf` skill and templates, use them for generated concept
+   documents and run:
+
+   ```bash
+   python3 -m panopticon.features check --docs-root <docs-location>
+   ```
+
+   Advisory mode reports findings for migration; blocking mode must be clean
+   before finalization. A disabled instance remains compatible with the core
+   four-layer templates and must not require the OKF helper or artifacts. CI
+   validates documentation but never rewrites it.
+
+8. **Draw the architecture diagram grounded in the actual code.** The `## Architecture diagram`
    section holds exactly one fenced code block, tagged with the instance's configured diagram
    format (read `panopticon.diagram.config.json` in the instance repo checkout if one is
    available; default `mermaid` when absent or no instance checkout is available locally) —
@@ -98,7 +111,7 @@ components that no longer exist.
    No node-level click-through inside the
    diagram — GitHub's Mermaid renderer does not reliably support `click`-to-URL navigation; the
    back-link is a plain markdown link, not a diagram directive.
-8. **Write the README architecture links.** At the top of `README.md`, write or refresh two markdown
+9. **Write the README architecture links.** At the top of `README.md`, write or refresh two markdown
    links, own-repo diagram directly above the org diagram, both labeled with the repo name (never a
    bare "architecture" — ambiguous once two links sit stacked):
 
@@ -119,7 +132,7 @@ components that no longer exist.
    script already implements config-first, bootstrap-context fallback, and fail-loudly-never-guess
    logic (architecture-diagrams capability, "Org-diagram link script"). If the script exits non-zero,
    stop and report the error it printed rather than writing a partial or guessed link.
-9. **Resolve drift against docs you find, don't just flag it.** If existing documentation — this
+10. **Resolve drift against docs you find, don't just flag it.** If existing documentation — this
    repo's own docs, or a reference/fixture doc committed elsewhere in the repo — describes code,
    configuration, or interfaces that no longer match the repo's actual current state, revise the
    documentation to match reality rather than leaving it stale or merely noting the mismatch in a

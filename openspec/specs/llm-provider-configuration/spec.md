@@ -5,7 +5,9 @@
 Define how Panopticon instances select, validate, persist, and communicate
 trusted LLM provider
 configuration without storing credential values.
+
 ## Requirements
+
 ### Requirement: Template instances require explicit provider configuration
 
 The template SHALL ship `panopticon.config.json` without a selected LLM

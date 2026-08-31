@@ -4,6 +4,8 @@ Deterministic, no LLM — unlike drift.py/currency.py this check needs no client
 exit-code contract: 0=well-formed, 2=missing/malformed, anything else=operational failure (an
 unsupported configured format, per config.require_supported_diagram_format)."""
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -47,7 +49,11 @@ class TestMainExitCodes(unittest.TestCase):
             argv += ["--report-file", str(report_file)]
         if actions_file:
             argv += ["--actions-file", str(actions_file)]
-        return main(argv)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(argv)
+        self.last_stdout = output.getvalue()
+        return code
 
     def test_well_formed_section_exits_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -66,6 +72,7 @@ class TestMainExitCodes(unittest.TestCase):
                 diagram_config={"format": "plantuml"},
             )
         self.assertNotIn(code, (0, 2))
+        self.assertIn("Panopticon diagram-existence check could not run", self.last_stdout)
 
     def test_unsupported_format_writes_could_not_run_report(self):
         with tempfile.TemporaryDirectory() as tmp:

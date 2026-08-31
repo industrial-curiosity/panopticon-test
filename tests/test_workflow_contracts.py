@@ -1,6 +1,7 @@
 """Contract validation for template-owned reusable provider workflows."""
 
 import contextlib
+import re
 import tempfile
 import unittest
 from io import StringIO
@@ -19,6 +20,36 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 class TestWorkflowContracts(unittest.TestCase):
+    def test_template_validation_is_guarded_to_the_canonical_repository(self):
+        workflow = (WORKFLOWS / "template-validation.yml").read_text(encoding="utf-8")
+        job = workflow.split("jobs:\n", 1)[1]
+        guard = "    if: github.repository == 'industrial-curiosity/panopticon-ay-eye'\n"
+        self.assertIn(guard, job)
+        self.assertNotIn(guard, workflow.split("jobs:\n", 1)[0])
+        self.assertLess(job.index(guard), job.index("    runs-on:"))
+        self.assertLess(job.index(guard), job.index("python3 -m panopticon.workflow_contracts"))
+
+    def test_step_bearing_workflow_jobs_start_with_a_purpose_summary(self):
+        paths = (*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml"))
+        for path in sorted(paths):
+            text = path.read_text(encoding="utf-8")
+            jobs = text.split("jobs:\n", 1)[1] if "jobs:\n" in text else ""
+            job_matches = re.finditer(
+                r"(?ms)^  (?P<name>[A-Za-z0-9_-]+):\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+                jobs,
+            )
+            for match in job_matches:
+                job_name = match.group("name")
+                job_body = match.group("body")
+                steps = re.search(r"(?ms)^    steps:\n(?P<body>.*)", job_body)
+                if steps is None:
+                    continue
+                first_step = re.split(r"\n      - ", steps.group("body"), maxsplit=1)[0]
+                with self.subTest(workflow=path.name, job=job_name):
+                    self.assertIn("- name: Write job purpose summary", first_step)
+                    self.assertIn("GITHUB_STEP_SUMMARY", first_step)
+                    self.assertIn("## Job purpose", first_step)
+
     def test_shipped_provider_workflows_declare_every_referenced_caller_value(self):
         for provider in ("litellm", "openai", "bedrock"):
             with self.subTest(provider=provider):

@@ -1,3 +1,5 @@
+# Child workflow caller sync proposal
+
 ## Why
 
 Child repositories initialized before a new managed caller workflow exists stay

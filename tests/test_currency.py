@@ -1,5 +1,7 @@
 """Index-currency check: verdict parsing, loud failures, report formatting."""
 
+import contextlib
+import io
 import json
 import tempfile
 import unittest
@@ -97,7 +99,11 @@ class TestMainExitCodes(unittest.TestCase):
             argv += ["--report-file", str(report_file)]
         with patch("panopticon.currency.LLMClient.from_env", return_value=None), \
              patch("panopticon.currency.check_currency", side_effect=effect):
-            return main(argv)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(argv)
+            self.last_stdout = output.getvalue()
+            return code
 
     def test_current_verdict_exits_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -116,6 +122,7 @@ class TestMainExitCodes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code = self._run_main(Path(tmp), raise_response_error)
         self.assertNotIn(code, (0, 2))
+        self.assertIn("Panopticon index-currency check could not run", self.last_stdout)
 
     def test_invalid_llm_configuration_is_an_operational_failure(self):
         def raise_configuration_error(*args, **kwargs):
@@ -124,6 +131,7 @@ class TestMainExitCodes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code = self._run_main(Path(tmp), raise_configuration_error)
         self.assertNotIn(code, (0, 2))
+        self.assertIn("invalid PANOPTICON_LLM_TIMEOUT_SECONDS", self.last_stdout)
 
     def test_operational_failure_writes_failure_section_to_report_file(self):
         def raise_response_error(*args, **kwargs):

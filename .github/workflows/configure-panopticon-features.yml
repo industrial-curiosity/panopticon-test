@@ -1,0 +1,77 @@
+# Configure one template-owned optional feature without accepting code or secret values.
+name: Configure Panopticon — Features
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature:
+        description: "Registered feature identifier (example: okf)"
+        required: true
+        default: okf
+      mode:
+        description: "Feature mode: disabled, advisory, or blocking; leave empty to preserve the current mode"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: panopticon-feature-configuration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job validates and persists one optional Panopticon feature mode."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out the instance
+        uses: actions/checkout@v7.0.1
+
+      - name: Validate and persist feature mode
+        uses: ./.github/actions/configure-panopticon-features
+        with:
+          feature: ${{ inputs.feature }}
+          mode: ${{ inputs.mode }}
+
+      - name: Commit instance feature configuration
+        shell: bash
+        env:
+          FEATURE: ${{ inputs.feature }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          fail() {
+            local reason=${1:?failure reason}
+            {
+              echo
+              echo "## Panopticon feature configuration failed"
+              echo
+              echo "- Feature: ${FEATURE}"
+              echo "- Target branch: ${TARGET_BRANCH}"
+              echo "- Evidence: ${reason}"
+              echo
+              echo "Fix location: correct the feature and mode inputs or resolve the branch protection issue, then rerun this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::${reason}; see the step summary"
+            exit 1
+          }
+          if git diff --quiet -- panopticon.config.json; then
+            echo "Feature configuration already matches the requested state." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]" || fail "Git could not set the configuration commit user name."
+          git config user.email "github-actions[bot]@users.noreply.github.com" || fail "Git could not set the configuration commit user email."
+          git add panopticon.config.json || fail "Git could not stage panopticon.config.json."
+          git commit -m "chore: configure Panopticon ${FEATURE} feature" || fail "Git could not commit the validated feature configuration."
+          if ! git push origin "HEAD:${TARGET_BRANCH}"; then
+            fail "The validated feature configuration could not be pushed to ${TARGET_BRANCH}; apply the diff on a branch and merge it, then rerun bootstrap or sync."
+          fi

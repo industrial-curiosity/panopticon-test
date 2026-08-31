@@ -1,3 +1,7 @@
+---
+type: plan
+---
+
 # Production rollout hardening action plan
 
 This plan converts the lessons in

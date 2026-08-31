@@ -1,3 +1,7 @@
+---
+type: reference
+---
+
 # Hint annotation reference
 
 Panopticon resolves some judgments (a canonical name, whether something belongs

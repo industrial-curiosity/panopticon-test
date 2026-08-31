@@ -253,8 +253,11 @@ class TestCli(unittest.TestCase):
 
         from panopticon.dependency_merge import main
 
-        with contextlib.redirect_stdout(io.StringIO()):
-            return main(list(argv))
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(list(argv))
+        self.last_stdout = output.getvalue()
+        return code
 
     def test_simulate_exit_codes_and_report(self):
         report_file = self.tmp / "report.md"
@@ -308,6 +311,7 @@ class TestCli(unittest.TestCase):
             "--report-file", str(report_file),
         )
         self.assertNotIn(code, (0, 2))
+        self.assertIn("Panopticon dependency pre-merge simulation could not run", self.last_stdout)
         text = report_file.read_text()
         self.assertIn("could not run", text)
 

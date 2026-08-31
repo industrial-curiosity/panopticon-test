@@ -1,3 +1,7 @@
+---
+type: guide
+---
+
 # Parser contribution guide
 
 Deterministic parsers are how Panopticon's interface coverage grows. When the

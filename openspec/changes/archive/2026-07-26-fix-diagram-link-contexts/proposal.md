@@ -13,7 +13,7 @@ Users viewing the child repository on GitHub receive a broken link.
 - Require links to the org architecture diagram to use its resolved absolute
   GitHub URL, including the child repository anchor.
 - Remove documentation that treats a broken child-repository org link as
-  expected behavior.
+expected behavior.
 
 ## Capabilities
 
@@ -31,4 +31,3 @@ Users viewing the child repository on GitHub receive a broken link.
 The documentation-generation skill and architecture template, architecture
 diagram specification, setup guidance, and diagram-link regression coverage are
 affected. No new dependency or external API is required.
-

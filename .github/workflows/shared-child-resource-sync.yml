@@ -16,6 +16,15 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Write job purpose summary
+        shell: bash
+        run: |
+          {
+            echo "## Job purpose"
+            echo
+            echo "This job synchronizes a child repository's documentation and index resources with the instance."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Require the child default branch
         shell: bash
         env:

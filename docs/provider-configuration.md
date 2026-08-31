@@ -1,3 +1,7 @@
+---
+type: guide
+---
+
 # Provider Configuration Defaults
 
 Use this guide after selecting LiteLLM, OpenAI, or Bedrock for an instance.

@@ -1,3 +1,5 @@
+# Diagram link context design
+
 ## Context
 
 Panopticon authors a child repository's documentation once, then mirrors it to

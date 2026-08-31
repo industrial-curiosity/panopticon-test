@@ -17,6 +17,7 @@ COMMON_PR_PHASES = (
     "Resolve instance provider defaults",
     "Resolve effective provider values",
     "Validate provider configuration revision",
+    "Run enabled feature checks",
     "Provider preflight",
     "Tooling-currency check (advisory only)",
     "Doc-drift check",
@@ -411,6 +412,33 @@ class TestProviderWorkflows(unittest.TestCase):
         text = self.workflow("panopticon-pr.yml")
         self.assertNotIn("panopticon.recovery", text)
         self.assertIn("PANOPTICON_INSTANCE='{instance}' python3", text)
+
+    def test_feature_dispatch_is_fixed_and_blocking_mode_reaches_final_gate(self):
+        for provider in ("litellm", "openai", "bedrock"):
+            text = self.workflow(f"panopticon-pr-{provider}.yml")
+            self.assertIn("python3 -m panopticon.features check", text)
+            self.assertIn("PANOPTICON_FEATURE_GATE=blocking-failed", text)
+            self.assertIn("Panopticon blocking feature check found documentation violations", text)
+            self.assertNotIn("feature:", text.split("workflow_call:", 1)[1].split("jobs:", 1)[0])
+            self.assertNotIn("feature_mode:", text)
+
+    def test_pinned_ref_warning_names_both_refs_and_exact_refresh_action(self):
+        for provider in ("litellm", "openai", "bedrock"):
+            text = self.workflow(f"panopticon-pr-{provider}.yml")
+            warning = text.split("- name: Warn about pinned workflow ref currency", 1)[1]
+            self.assertIn("actual", warning)
+            self.assertIn("configured", warning)
+            self.assertIn("python3 -m panopticon.sync", warning)
+            self.assertIn("does not infer a latest tag", warning)
+
+    def test_generic_feature_configuration_has_no_secret_inputs(self):
+        workflow = self.workflow("configure-panopticon-features.yml")
+        action = (ROOT / ".github" / "actions" / "configure-panopticon-features" / "action.yml").read_text()
+        self.assertIn("feature:", workflow)
+        self.assertIn("mode:", workflow)
+        self.assertIn("configure_feature", action)
+        self.assertNotIn("secrets:", workflow)
+        self.assertNotIn("secrets:", action)
 
 
 if __name__ == "__main__":

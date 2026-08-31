@@ -1,3 +1,7 @@
+---
+type: architecture
+---
+
 # Panopticon technical workflow architecture
 
 ## Purpose
@@ -133,6 +137,19 @@ organization-managed credentials may require per-child provisioning. The
 instance setup guide records the authoritative evidence, owner, recovery, and
 proof for each gate.
 
+## Workflow summaries and template validation
+
+Every shipped GitHub Actions job with executable steps begins by appending a
+`## Job purpose` section and one brief, non-sensitive sentence describing its
+intended action to `GITHUB_STEP_SUMMARY`. Existing success, failure, and recovery
+details follow that preamble. Caller-only jobs that delegate with `uses:` have no
+steps and inherit the summary responsibility from the invoked reusable job.
+
+The template-validation workflow's validation job is created only when
+`github.repository` exactly equals `industrial-curiosity/panopticon-ay-eye`.
+Template-derived instance repositories may retain the workflow file, but their
+instances skip checkout, workflow-contract validation, and template tests.
+
 ## Evaluation and synchronization
 
 Child PR callers invoke the selected LiteLLM, OpenAI, or Bedrock evaluation workflow with
@@ -195,6 +212,31 @@ written to runtime `merge.ours` attributes and reported separately from
 organization-declared paths. Recovery text links to the reviewed credential
 example and gives the same derivation for local repair. Syncs report the failing
 stage and recovery action when they cannot complete.
+
+### Optional feature packages
+
+The template-owned `features/manifest.json` registry is the only source of
+optional child artifacts. Instance configuration stores feature IDs and modes
+(`disabled`, `advisory`, or `blocking`); it cannot provide source paths,
+destinations, commands, or workflows. Bootstrap and local sync stage enabled
+feature bytes before writing them, record exact installed paths in
+`panopticon/feature-receipt.json`, and delete only valid receipt-owned paths
+when a feature is disabled. Interactive bootstrap asks before cleanup;
+non-interactive bootstrap and sync report each deletion without staging,
+committing, or pushing it.
+
+The initial `okf` package supplies constrained Markdown frontmatter, templates,
+and a standard-library validator. The template documentation bundle remains
+valid OKF Markdown even when the feature is disabled. Enabled advisory checks
+report findings, while blocking checks contribute to the existing final PR and
+initialization gates. Shared workflows load feature modes from the checked-out
+instance configuration through a fixed dispatcher and do not add feature
+inputs or secrets to child callers.
+
+Shared PR workflows also place a non-blocking first-summary caution when the
+child caller's pinned reusable-workflow ref differs from the instance's
+configured `workflow_ref`; the warning names both refs and directs maintainers
+to refresh with `python3 -m panopticon.sync` or bootstrap.
 
 ## Architecture diagram links
 
