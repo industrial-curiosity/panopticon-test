@@ -2,7 +2,8 @@
 name: panopticon-init
 description: >-
   Orchestrate Panopticon repo initialization end to end: interface naming, interface extraction,
-  dependency naming, dependency extraction, documentation generation, then finalization — in the
+  dependency naming, dependency extraction, documentation generation, enabled feature remediation,
+  then finalization — in the
   correct dependency order, resuming from a checkpoint log if a prior run was interrupted. Apply
   when the user invokes /panopticon-init, right after the bootstrap installer script has printed
   its prompt, or whenever a full initialization (rather than a single step) is requested.
@@ -10,7 +11,8 @@ description: >-
 
 # Panopticon init orchestration
 
-Runs the five Phase 2 skills and the Phase 3 finalization command in the one order that works,
+Runs the five Phase 2 skills, enabled feature remediation, and the Phase 3 finalization command in
+the one order that works,
 tracking progress in a checkpoint log so an interrupted run resumes instead of restarting or
 skipping ahead of its prerequisites. Each underlying step also stays independently invocable on
 its own — this skill only sequences them.
@@ -28,8 +30,13 @@ its own — this skill only sequences them.
    index for organization-aware naming, lets the local agent persist reviewed name hints and rerun
    interface extraction when needed, then renders the interface-docs and dependency-docs layers
    from the resulting `panopticon/index.json` and dependency shard
-6. Finalization: `python3 -m panopticon.init_repo --instance <instance>` — the last step, run only
-   after 1–5 are complete. Do not ask the user to finalize early: documentation generation derives
+6. Enabled feature remediation — read `panopticon/feature-receipt.json`, identify every feature
+   whose mode is `advisory` or `blocking`, invoke its installed
+   `panopticon-feature-<feature-id>` skill, and run that feature's deterministic validator. An
+   advisory finding is non-blocking for CI but remains required agent work; repair deterministic
+   findings and revalidate before continuing. Keep the checkpoint when a finding remains unresolved.
+7. Finalization: `python3 -m panopticon.init_repo --instance <instance>` — the last step, run only
+   after 1–6 are complete. Do not ask the user to finalize early: documentation generation derives
    the bootstrap context it needs before `panopticon/config.json` exists.
 
 ## Checkpoint log
@@ -46,11 +53,12 @@ Maintain `panopticon/.init-log.json` — a JSON list of completed step ids, e.g.
   moving to the next step. This is what makes a resumed session (with no memory of the prior one)
   pick up correctly instead of restarting from scratch or skipping into a step whose prerequisites
   were never met.
-- Once all six steps have completed and `panopticon/config.json` exists, **delete**
-  `panopticon/.init-log.json`. A completed initialization has no further use for it.
+- Once all seven steps have completed, `panopticon/config.json` exists, and no agent-remediable
+  feature finding remains, **delete** `panopticon/.init-log.json`. A completed initialization has no
+  further use for it.
 
 Step ids: `interface-naming`, `interface-extraction`, `dependency-naming`, `dependency-extraction`,
-`doc-generation`, `finalization`.
+`doc-generation`, `feature-remediation`, `finalization`.
 
 ## Determining the instance slug
 
@@ -63,15 +71,18 @@ instance slug — the bootstrap script already wired this file before printing t
 
 For each step in order, skip it if already recorded in the checkpoint log, otherwise:
 
-1. Run the step (invoke the named skill, or the finalization command for step 6).
+1. Run the step (invoke the named skill, or the finalization command for step 7).
 2. On success, update the checkpoint log.
 3. Continue to the next step.
 
-If finalization reports unmet requirements, fix them (the underlying skills remain invocable
-individually for this), then re-run finalization — do not delete the checkpoint log until
-finalization actually succeeds. A missing `panopticon/config.json` during documentation generation
-is not a reason to pause: continue in the listed order unless the bootstrap caller workflow itself
-is missing or invalid, in which case rerun child bootstrap.
+If feature validation reports an unresolved advisory finding, retain the checkpoint and report the
+installed feature skill plus `python3 -m panopticon.features check --root . --docs-root <docs-location>`
+as the exact continuation action. If finalization reports unmet requirements, fix them (the
+underlying skills remain invocable individually for this), then re-run finalization — do not delete
+the checkpoint log until finalization succeeds with no agent-remediable feature finding. A missing
+`panopticon/config.json` during documentation generation is not a reason to pause: continue in the
+listed order unless the bootstrap caller workflow itself is missing or invalid, in which case rerun
+child bootstrap.
 
 If a step stops to ask the user about a documentation/code contradiction it can't resolve on its
 own (see panopticon-doc-generation's and panopticon-interface-naming's drift-resolution rules),

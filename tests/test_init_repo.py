@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 
 from panopticon.config import load_repo_config
+from panopticon.features import build_receipt, load_manifest, write_receipt
 from panopticon.index import save_index
 from panopticon.init_repo import (
     INITIALIZATION_REPORT,
@@ -408,6 +409,47 @@ class TestSecretVerification(unittest.TestCase):
         self.assertIn("## Organization configuration", report)
         self.assertIn("could not query org secrets", report)
         self.assertIn("does not block local initialization", report)
+
+    def test_advisory_feature_and_org_findings_coexist_in_initialization_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_valid_child(tmp)
+            root = Path(tmp)
+            helper = root / "panopticon" / "feature_okf.py"
+            helper.write_bytes((Path(__file__).parents[1] / "features/okf/okf.py").read_bytes())
+            entry = {"feature": "okf", "destination": "panopticon/feature_okf.py"}
+            write_receipt(build_receipt(load_manifest(Path(__file__).parents[1]),
+                                        {"okf": "advisory"}, [entry]), tmp)
+            with unittest.mock.patch(
+                "panopticon.init_repo.verify_org_secrets",
+                return_value=["could not query org Actions settings"],
+            ):
+                code, _ = run_init(tmp, skip_secret_check=False)
+            report = (root / INITIALIZATION_REPORT).read_text()
+
+        self.assertEqual(code, 0)
+        self.assertIn("## Child repository", report)
+        self.assertIn("feature `okf`", report)
+        self.assertIn(".agents/skills/panopticon-feature-okf/SKILL.md", report)
+        self.assertIn("python3 -m panopticon.features check --root . --docs-root docs", report)
+        self.assertIn("## Organization configuration", report)
+        self.assertIn("could not query org Actions settings", report)
+
+    def test_advisory_feature_finding_remains_non_blocking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_valid_child(tmp)
+            root = Path(tmp)
+            helper = root / "panopticon" / "feature_okf.py"
+            helper.write_bytes((Path(__file__).parents[1] / "features/okf/okf.py").read_bytes())
+            entry = {"feature": "okf", "destination": "panopticon/feature_okf.py"}
+            write_receipt(build_receipt(load_manifest(Path(__file__).parents[1]),
+                                        {"okf": "advisory"}, [entry]), tmp)
+            code, _ = run_init(tmp)
+            config = load_repo_config(tmp)
+            report = (root / INITIALIZATION_REPORT).read_text()
+
+        self.assertEqual(code, 0)
+        self.assertIsNotNone(config)
+        self.assertIn("**Complete with follow-up.**", report)
 
 
 class TestResolveInstanceDefaultBranch(unittest.TestCase):

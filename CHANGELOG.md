@@ -2,6 +2,15 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [require-advisory-feature-remediation] - 2026-08-31
+
+### Changed
+
+- Advisory feature findings are now required agent remediation while remaining
+  non-blocking for initialization and shared PR gates.
+- Initialization reports preserve unresolved feature actions with their skill and
+  revalidation command, alongside organization configuration findings.
+
 ## [specify-bootstrap-dependency-closure] - 2026-08-31
 
 ### Changed
