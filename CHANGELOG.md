@@ -2,6 +2,56 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [add-complex-organization-template] - 2026-08-21
+
+### Added
+
+- Added a stdlib-only organization profile validator and reviewable instance
+  overlay generator for complex provider onboarding.
+- Added concrete direct-OIDC and instance-managed synthetic profiles, generated
+  four-gate onboarding checklists, protection metadata, and bounded overlay
+  application with preflight checks.
+
+### Changed
+
+- Generated callers and configuration continue to use trusted provider
+  contracts, explicit mappings, and provider-derived protection ownership.
+- Profiles now reject attempts to classify template-generated or
+  provider-derived paths as organization debt.
+
+## [simplify-readme-start-here] - 2026-08-09
+
+### Changed
+
+- README onboarding now gives a concise project orientation and first setup path
+  while directing provider, compatibility, and operational details to focused
+  guides.
+- Repository requirements now enforce a readable, user-focused `Start here`
+  section instead of an implementation-heavy block.
+
+## [complete-bedrock-onboarding-hardening] - 2026-08-09
+
+### Added
+
+- Bedrock onboarding now supports an optional instance model default and
+  validates inference-profile permissions for both the profile and foundation
+  model resources.
+- Bootstrap and local sync now provide protected credential-action recovery,
+  graceful caller-renderer diagnostics, and dependency-safe default payload
+  loading.
+
+### Changed
+
+- Provider workflow compatibility now distinguishes caller ABI changes,
+  instance-owned defaults, and reusable-workflow fallbacks.
+- Tooling and workflow drift checks remain advisory while reporting actionable
+  recovery guidance.
+
+### Fixed
+
+- Bedrock-only CLI model defaults are rejected for non-Bedrock providers before
+  configuration persistence.
+
 ## [harden-rollout-preflight-feedback] - 2026-08-07
 
 ### Changed

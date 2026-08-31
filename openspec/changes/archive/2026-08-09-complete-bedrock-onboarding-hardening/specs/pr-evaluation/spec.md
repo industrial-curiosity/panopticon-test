@@ -121,6 +121,8 @@ require child-repository maintainer action.
 - **THEN** it ignores that legacy value and uses the organization variable or
   the reusable-workflow fallback
 
+## ADDED Requirements
+
 ### Requirement: Reusable PR workflows expose only consumed caller inputs
 
 Each provider-specific reusable PR-evaluation workflow SHALL omit

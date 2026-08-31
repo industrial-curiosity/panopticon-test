@@ -309,7 +309,7 @@ determine a caller revision or rendered caller for a distinct pinned
 
 ## MODIFIED Requirements
 
-### Requirement: Provider configuration exposes separate full-contract and caller revisions
+### Requirement: Caller compatibility revisions avoid runtime-only provider churn
 
 The effective provider contract SHALL expose `revision` as a deterministic
 full-contract fingerprint for diagnostics and contract-change tests. Generated
@@ -440,6 +440,8 @@ require child bootstrap.
 - **WHEN** the provider workflow resolves its effective configuration
 - **THEN** it fails before provider preflight, names the logical value and
   checked sources, and does not display any credential or value
+
+## ADDED Requirements
 
 ### Requirement: Provider workflows resolve effective configuration before preflight
 

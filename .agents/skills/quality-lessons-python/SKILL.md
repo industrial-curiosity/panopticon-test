@@ -12,3 +12,11 @@ description: Language-specific code quality lessons for Python. Load this skill 
 **Trigger**: Executing fetched Python modules into an in-memory package with an empty `__path__` while registering a module after another module imports it.
 
 **Fix**: Register modules in dependency order and test the path with the real source of the module that owns the import.
+
+### Derived path ownership — reject reclassification at profile validation
+
+**Trigger**: A profile allows organization-declared protected paths to overlap
+with template-generated or provider-derived paths.
+
+**Fix**: Compare normalized repository-relative paths against every derived
+protected path before generating ownership metadata or debt records.

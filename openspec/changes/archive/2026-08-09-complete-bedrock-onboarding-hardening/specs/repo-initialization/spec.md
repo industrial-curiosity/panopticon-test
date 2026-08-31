@@ -29,6 +29,8 @@ existing validated, authenticated GitHub-contents path into the in-memory
 - **THEN** the launcher fails with its controlled invalid-payload error before
   executing the recovery or bootstrap modules
 
+## ADDED Requirements
+
 ### Requirement: Bootstrap caller-renderer failures are contained before writes
 
 The bootstrap installer SHALL load the caller renderer from the effective

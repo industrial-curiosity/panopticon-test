@@ -89,7 +89,7 @@ jobs:
       PANOPTICON_INSTANCE_TOKEN: ${{ secrets.instance_token }}
     steps:
       - name: Check out PR branch
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -172,7 +172,7 @@ jobs:
 
       - name: Check out instance repo (tooling, skills, compiled index, org config)
         if: steps.init.outputs.initialized == 'true'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7.0.1
         with:
           repository: ${{ inputs.instance }}
           token: ${{ secrets.instance_token }}

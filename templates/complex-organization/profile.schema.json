@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/panopticon/complex-organization-profile.schema.json",
+  "title": "Panopticon complex-organization profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider",
+    "identity",
+    "child_identity"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "provider": { "enum": ["litellm", "openai", "bedrock"] },
+    "credential_mode": { "enum": ["github-oidc", "instance-managed"] },
+    "names": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "secrets": { "type": "object", "additionalProperties": { "type": "string" } },
+        "variables": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "defaults": { "type": "object", "additionalProperties": { "type": "string" } },
+    "default_sources": {
+      "type": "object",
+      "additionalProperties": {
+        "enum": ["organization-variable", "instance-action", "instance-config", "workflow-default"]
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role_reference": { "type": "string" },
+        "child_provisioning_reference": { "type": "string" }
+      },
+      "required": ["child_provisioning_reference"]
+    },
+    "broker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "region_output"],
+      "properties": {
+        "action": { "type": "string" },
+        "region_output": { "type": "string" }
+      }
+    },
+    "workflow_access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy"],
+      "properties": {
+        "policy": { "type": "string" },
+        "diagnostic_url": { "format": "uri", "type": "string" }
+      }
+    },
+    "child_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instructions", "diagnostic_url"],
+      "properties": {
+        "instructions": { "type": "string" },
+        "diagnostic_url": { "format": "uri", "type": "string" }
+      }
+    },
+    "internal_registries": { "type": "array", "items": { "type": "string" } },
+    "gating": {
+      "type": "object",
+      "additionalProperties": { "enum": ["blocking", "advisory"] }
+    },
+    "protected_paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "reason",
+          "owner",
+          "upstream_replacement",
+          "last_reconciliation",
+          "removal_condition"
+        ],
+        "properties": {
+          "path": { "type": "string" },
+          "reason": { "type": "string" },
+          "owner": { "type": "string" },
+          "upstream_replacement": { "type": "string" },
+          "last_reconciliation": { "type": "string" },
+          "removal_condition": { "type": "string" }
+        }
+      }
+    },
+    "workflow_ref": { "type": "string" }
+  }
+}

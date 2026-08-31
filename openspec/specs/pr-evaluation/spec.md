@@ -4,9 +4,7 @@
 
 Define the reusable pull-request workflow that evaluates Panopticon-managed
 repositories.
-
 ## Requirements
-
 ### Requirement: Initialization check
 
 The PR workflow SHALL verify that the repo is Panopticon-initialized
@@ -24,13 +22,14 @@ procedure.
 ### Requirement: Bounded PR-evaluation job duration
 
 Each provider-specific reusable PR-evaluation workflow SHALL set an explicit
-timeout for its evaluate job
-from the canonical workflow input mapped by child bootstrap from the configured
-org-level job-timeout
-variable name, using 20 minutes when the mapped value is unset. The setup guide
-SHALL document that the
-value accepts a whole number from 10 through 60 and is evaluated by GitHub
-Actions before the job starts.
+timeout for its evaluate job from the canonical workflow input mapped by child
+bootstrap from the configured organization-level job-timeout variable name,
+using 20 minutes when the mapped value is unset. The setup guide SHALL
+document that the value accepts a whole number from 10 through 60 and is
+evaluated by GitHub Actions before the job starts. Instance configuration and
+the fixed instance default-resolver action SHALL NOT supply this job-level
+value, and changing the organization variable or workflow fallback SHALL NOT
+require child-repository maintainer action.
 
 #### Scenario: Default evaluate-job duration
 
@@ -38,12 +37,21 @@ Actions before the job starts.
 - **THEN** GitHub Actions terminates the evaluate job after 20 minutes if it has
   not completed
 
-#### Scenario: Configured evaluate-job duration
+#### Scenario: Instance administrators change the evaluate-job duration
 
-- **WHEN** child bootstrap maps a configured org variable whose value is a whole
-  number from 10 through 60
-- **THEN** the selected provider workflow uses that number as its evaluate job
-  timeout in minutes
+- **GIVEN** an instance administrator changes the mapped organization Actions
+  variable to a whole number from 10 through 60
+- **WHEN** a child repository invokes the reusable workflow
+- **THEN** the selected provider workflow uses that number without requiring
+  child caller regeneration or a child maintainer commit
+
+#### Scenario: Legacy instance default is not a live timeout source
+
+- **GIVEN** an existing instance configuration contains a legacy
+  `job_timeout_minutes` default
+- **WHEN** the provider workflow starts
+- **THEN** it ignores that legacy value and uses the organization variable or
+  the reusable-workflow fallback
 
 ### Requirement: Provider workflows resolve effective configuration before preflight
 
@@ -663,3 +671,16 @@ values.
   importable
 - **THEN** the inline fallback contains the same path, example, protection,
   and rerun guidance
+
+### Requirement: Reusable PR workflows expose only consumed caller inputs
+
+Each provider-specific reusable PR-evaluation workflow SHALL omit
+`configuration_defaults` from its `workflow_call` contract, and generated PR
+callers SHALL NOT pass that input, because timeout resolution is owned by the
+organization variable and reusable-workflow fallback.
+
+#### Scenario: Generated caller invokes a provider workflow
+
+- **WHEN** bootstrap renders the provider PR caller
+- **THEN** the caller and the selected reusable workflow contain no
+  `configuration_defaults` input declaration or mapping

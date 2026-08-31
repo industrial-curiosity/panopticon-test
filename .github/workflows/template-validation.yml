@@ -13,7 +13,7 @@ jobs:
     name: Validate template
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Validate reusable workflow contracts
         run: python3 -m panopticon.workflow_contracts --workflows-dir .github/workflows

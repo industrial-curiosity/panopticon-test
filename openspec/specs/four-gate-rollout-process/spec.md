@@ -5,9 +5,7 @@
 Define the supported four-gate operating process for reusable-workflow access,
 effective provider configuration, caller identity and credentials, and real
 provider-request compatibility.
-
 ## Requirements
-
 ### Requirement: Four-gate operating sequence is explicit
 
 Public setup and getting-started guidance SHALL define an ordered sequence of
@@ -15,7 +13,9 @@ four gates: reusable-workflow access, effective provider configuration,
 caller-repository identity and credentials, and real provider-request
 compatibility. For each gate it SHALL state the observable symptom,
 authoritative evidence, ownership boundary, exact recovery action, and proof
-required to advance.
+required to advance. Generated instance and child onboarding guides SHALL
+preserve this sequence and SHALL distinguish instance-wide access/configuration
+from per-child identity provisioning.
 
 #### Scenario: Maintainer locates the last proven gate
 
@@ -29,6 +29,13 @@ required to advance.
   identity, credentials, or provider request shape
 - **THEN** the guide names the authoritative evidence and whether the repair is
   instance-wide or specific to the child repository
+
+#### Scenario: Generated guidance separates ownership
+
+- **WHEN** an organization generates onboarding guidance for a new child
+- **THEN** instance-wide workflow access and provider configuration are shown
+  separately from child-specific caller identity and credential provisioning,
+  with proof required at each boundary
 
 ### Requirement: Private workflow access has a pre-child check
 
@@ -119,3 +126,59 @@ metadata/discovery permission. Examples SHALL use placeholder or synthetic ARNs.
 - **WHEN** the profile can be discovered but invocation is denied
 - **THEN** the guide distinguishes `GetInferenceProfile` from invocation and
   directs the owner to inspect both `InvokeModel` resource entries
+
+### Requirement: Gate-1 recovery includes an executable access-policy mutation
+
+Public rollout guidance SHALL provide the exact GitHub CLI mutation command for
+an instance administrator to allow organization callers:
+`gh api -X PUT repos/YOUR-ORG/YOUR-INSTANCE-REPO/actions/permissions/access -f access_level=organization`.
+The guidance SHALL identify the command as a policy mutation, state the
+required administrator permissions, and retain a read-only check and UI
+alternative.
+
+#### Scenario: Instance owner repairs denied reusable-workflow access
+
+- **WHEN** the access preflight reports that organization callers are not
+  allowed
+- **THEN** the guide provides the placeholder-safe `gh api -X PUT` command,
+  explains that it changes the instance access policy, and identifies the
+  required administrator token permissions
+
+#### Scenario: Administrator verifies the policy without mutating it
+
+- **WHEN** an operator only has read access or chooses not to change policy
+- **THEN** the guide provides the read-only API check and Settings UI path and
+  does not present the mutation as a required automated step
+
+### Requirement: Bedrock inference-profile permissions cover both resources
+
+Bedrock rollout guidance SHALL state that an application inference-profile
+request requires `bedrock:InvokeModel` on both the selected inference-profile
+ARN and the underlying foundation-model ARN. It SHALL distinguish that
+requirement from `bedrock:GetInferenceProfile` metadata/discovery access and
+use placeholder or synthetic ARNs in public examples.
+
+#### Scenario: IAM policy grants an application inference profile
+
+- **WHEN** an organization configures a Bedrock application inference profile
+- **THEN** the setup guide directs the owner to grant `bedrock:InvokeModel` on
+  the profile ARN and the underlying foundation-model ARN
+
+#### Scenario: Operator diagnoses a profile permission failure
+
+- **WHEN** the profile can be discovered but invocation is denied
+- **THEN** the guide distinguishes `GetInferenceProfile` from invocation and
+  directs the owner to inspect both `InvokeModel` resource entries
+
+### Requirement: Getting-started guidance links to the authoritative rollout guide
+
+The public `PANOPTICON.md` getting-started guide SHALL direct readers to
+`docs/setup-guide.md` as the authoritative source for the four-gate rollout and
+troubleshooting process, rather than duplicating that process in a second
+document.
+
+#### Scenario: A child maintainer starts from the getting-started guide
+
+- **WHEN** a reader follows the public getting-started guide for onboarding
+- **THEN** the guide contains a link to `docs/setup-guide.md` for the complete
+  four-gate setup and recovery instructions

@@ -57,7 +57,7 @@ jobs:
           PAT that has Contents and Workflows read/write access, then retry.
           EOF
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
           # A PAT is required only when this sync pushes workflow-file changes. The fallback keeps
@@ -144,7 +144,7 @@ jobs:
                   "they are not org customizations:\n\n"
               )
               for path in generated_paths:
-                  handle.write(f"- `{path}`\n")
+                  handle.write(f"- `{path}` — template-generated output rebuilt by Panopticon merge tooling.\n")
 
               handle.write("\n## Provider-derived protected paths\n\n")
               if provider_paths:
@@ -153,7 +153,7 @@ jobs:
                       "instance-owned paths:\n\n"
                   )
                   for path in provider_paths:
-                      handle.write(f"- `{path}`\n")
+                      handle.write(f"- `{path}` — provider-derived protection from the trusted provider contract.\n")
               else:
                   handle.write("No trusted provider-derived paths declared for this instance.\n")
 
@@ -164,7 +164,7 @@ jobs:
                       "(never visible in the tracked tree — this step summary is the audit trail):\n\n"
                   )
                   for path in protected_paths:
-                      handle.write(f"- `{path}`\n")
+                      handle.write(f"- `{path}` — organization-declared customization; maintain its debt record.\n")
               else:
                   handle.write("No `protected_paths` entries declared in `panopticon.config.json`.\n")
 

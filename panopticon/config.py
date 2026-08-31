@@ -106,6 +106,11 @@ PROTECTED_CONFIG_FILES = {
     DIAGRAM_CONFIG_BASENAME: {"format": DEFAULT_DIAGRAM_FORMAT},
 }
 GENERATED_PROTECTED_PATHS = ("docs/architecture.md",)
+PROTECTED_PATH_CLASS_REASONS = {
+    "generated": "Template-generated instance output is rebuilt by Panopticon merge tooling.",
+    "provider": "Provider-derived protection is required by the trusted provider contract.",
+    "organization": "Organization-declared protection preserves a reviewed instance customization.",
+}
 
 
 class ConfigError(Exception):
@@ -134,6 +139,24 @@ def derive_protected_paths(org_config):
     """Return deduplicated runtime merge-protected paths in report order."""
     groups = derive_protected_path_groups(org_config)
     return tuple(dict.fromkeys(path for paths in groups.values() for path in paths))
+
+
+def protected_path_metadata(org_config):
+    """Return protected paths with stable ownership classes and human-readable reasons."""
+    groups = derive_protected_path_groups(org_config)
+    return tuple(
+        {
+            "path": path,
+            "class": {
+                "generated": "template-generated",
+                "provider": "provider-derived",
+                "organization": "organization-declared",
+            }[group],
+            "reason": PROTECTED_PATH_CLASS_REASONS[group],
+        }
+        for group, paths in groups.items()
+        for path in paths
+    )
 
 
 def _load_json(path, description):

@@ -5,9 +5,7 @@
 Define how Panopticon instances select, validate, persist, and communicate
 trusted LLM provider
 configuration without storing credential values.
-
 ## Requirements
-
 ### Requirement: Template instances require explicit provider configuration
 
 The template SHALL ship `panopticon.config.json` without a selected LLM
@@ -264,47 +262,57 @@ The trusted provider registry SHALL declare which selected-provider variable
 logical names are optional and which have template workflow defaults. Optional
 names SHALL be a subset of the selected provider and credential mode's
 registered variables. The instance contract MAY declare non-secret defaults
-only for optional names. The instance token, provider credentials, API keys,
-and authentication settings SHALL remain required and SHALL NOT be supplied by
-an instance default or default-resolver action.
+only for optional runtime values. The instance token, provider credentials,
+API keys, and authentication settings SHALL remain required and SHALL NOT be
+supplied by an instance default or default-resolver action.
 
-For each optional variable, the effective value SHALL be selected in this order:
-an explicit non-empty organization Actions variable, a non-empty output from
-the fixed instance default-resolver action, a non-empty non-secret instance
-configuration default, then the declared non-empty template workflow default.
-If no source supplies a value, provider configuration SHALL fail before
-provider preflight or LLM work.
+For each optional variable, the effective value SHALL be selected in this
+order: an explicit non-empty organization Actions variable, a non-empty output
+from the fixed instance default-resolver action, a non-empty non-secret
+instance configuration default, then the declared non-empty template workflow
+default. If no source supplies a value, provider configuration SHALL fail
+before provider preflight or LLM work.
 
-`job_timeout_minutes` SHALL be resolved in the generated caller because GitHub
-evaluates job timeout before an instance action can run. Its supported order is
-an explicit organization Actions variable, a non-secret instance configuration
-default embedded in the generated caller, then the declared template workflow
-default. The fixed instance default-resolver action SHALL NOT provide this
-value.
+New configuration surfaces SHALL NOT accept or persist an instance default for
+`job_timeout_minutes`; a legacy persisted value MAY be read and ignored for
+migration. `job_timeout_minutes` SHALL be resolved by the reusable workflow
+from the organization Actions variable or its workflow-owned fallback; instance
+defaults and the fixed default-resolver action SHALL NOT supply that job-level
+value. Changing the organization variable or workflow-owned fallback SHALL NOT
+require child bootstrap.
 
-#### Scenario: Organization Actions variable has precedence
+#### Scenario: Shared workflow supplies the timeout fallback
 
-- **GIVEN** an optional provider variable has values from all four trusted
-  sources
-- **WHEN** the provider workflow resolves its effective configuration
-- **THEN** it uses the organization Actions variable and reports only that
-  source label
+- **GIVEN** the organization Actions variable for `job_timeout_minutes` is
+  absent
+- **WHEN** the reusable provider workflow starts
+- **THEN** GitHub applies the workflow-owned fallback before the evaluate job
+  runs, without consulting an instance action or child caller default
 
-#### Scenario: Fixed action supplies an absent optional value
+#### Scenario: Organization timeout variable takes precedence
 
-- **GIVEN** an optional provider variable is absent from organization Actions
-  variables and the fixed instance action returns a non-empty declared output
-- **WHEN** the provider workflow resolves its effective configuration
-- **THEN** it uses the action output before any instance-configured or workflow
-  default
+- **GIVEN** the organization Actions variable for `job_timeout_minutes` is a
+  valid value from 10 through 60
+- **WHEN** the generated caller invokes the reusable workflow
+- **THEN** the workflow uses the organization value before applying its
+  fallback
 
-#### Scenario: Caller carries an instance job-timeout default
+#### Scenario: Organization administrators change the timeout without child action
 
-- **GIVEN** `job_timeout_minutes` is absent from organization Actions variables
-  and the instance configuration declares a valid non-secret default
-- **WHEN** child bootstrap generates a caller
-- **THEN** the caller supplies that default to the reusable workflow before job
-  timeout is evaluated and does not invoke the fixed action for it
+- **GIVEN** an instance administrator changes the mapped organization Actions
+  variable to a valid value from 10 through 60
+- **WHEN** an existing child invokes the reusable workflow
+- **THEN** the workflow uses the new value without child caller regeneration or
+  a child maintainer commit
+
+#### Scenario: Legacy job-timeout default is ignored without breaking migration
+
+- **GIVEN** an existing instance configuration contains
+  `llm.defaults.job_timeout_minutes`
+- **WHEN** the trusted resolver loads the configuration
+- **THEN** it accepts the configuration for migration, excludes that value from
+  the effective persisted contract, and resolves the job timeout only from
+  the organization variable or reusable-workflow fallback
 
 #### Scenario: Optional value has no effective source
 
@@ -312,13 +320,6 @@ value.
 - **WHEN** the provider workflow resolves its effective configuration
 - **THEN** it fails before provider preflight, names the logical value and
   checked sources, and does not display any credential or value
-
-#### Scenario: Invalid optional logical name is rejected
-
-- **WHEN** an instance configuration marks an unregistered or required logical
-  name optional or provides it with a default
-- **THEN** provider-contract validation fails before writing configuration or
-  generating a child caller
 
 ### Requirement: Integrator guidance explains effective provider configuration
 
@@ -473,58 +474,115 @@ to accept the model Actions-name input and SHALL accept no credential values.
 
 ### Requirement: Caller compatibility revisions avoid runtime-only provider churn
 
-The generated-caller renderer SHALL own a canonical, semantic compatibility
-payload containing only the contract values that alter the invoked reusable
-workflow, its caller permissions, or its supplied inputs and secrets. The
-caller-staleness revision SHALL be the hash of that payload. Provider-contract
-fields that the renderer does not consume, including optional-value
-classification, effective-value source resolution, dependencies, and template
-defaults, SHALL NOT make an existing caller stale. The provider-contract
-resolver SHALL NOT maintain a separate manually curated list of
-caller-compatibility fields.
+The effective provider contract SHALL expose `revision` as a deterministic
+full-contract fingerprint for diagnostics and contract-change tests. Generated
+callers and reusable workflows SHALL use `caller_revision` for the
+caller-visible compatibility boundary. The reusable-workflow input named
+`configuration_revision` SHALL remain the canonical wire name for backwards
+compatibility, but SHALL carry the semantic `caller_revision` value; it SHALL
+not be renamed without a coordinated caller-ABI migration. During migration,
+`legacy_revision` SHALL equal the full-contract fingerprint that the
+pre-optionality Bedrock contract would have produced, so existing callers
+remain accepted without making the full-contract fingerprint a
+caller-staleness check. A caller compatibility mismatch SHALL report
+`caller compatibility revision changed` and include the child-bootstrap
+recovery path.
 
-A caller ABI change that adds or changes a required reusable-workflow input,
-secret mapping, permission, credential mode, workflow target, or
-caller-supplied default SHALL change the compatibility payload and require
-regeneration. Provider workflows SHALL accept the legacy revision for an
-otherwise compatible caller during migration.
+The legacy fingerprint SHALL be reconstructed from the raw, validated instance
+defaults before migration-only fields are removed from the effective contract.
+It SHALL preserve a legacy `job_timeout_minutes` default when an existing
+caller could have embedded it, and SHALL remove the newly introduced Bedrock
+`model` default because pre-optionality callers could not have embedded that
+field.
 
-#### Scenario: Bedrock runtime optionality preserves an existing caller
+#### Scenario: Legacy revision preserves the pre-optionality Bedrock contract
 
-- **GIVEN** an existing Bedrock caller has unchanged names, permissions,
-  credential mode, and defaults
-- **WHEN** the provider adds a server-side optional model source
-- **THEN** the workflow accepts the existing caller without requiring child
-  bootstrap solely for that runtime change
+- **GIVEN** a Bedrock contract adds `model` to its optional runtime values
+- **WHEN** the trusted resolver produces the current contract
+- **THEN** its `legacy_revision` equals the deterministic full-contract hash
+  after removing only the Bedrock `model` optionality and its associated
+  template default and any newly introduced Bedrock model default, while
+  preserving raw legacy defaults that pre-change callers could have embedded;
+  `caller_revision` remains the active caller check
 
-#### Scenario: A runtime-only provider-contract field does not churn callers
+#### Scenario: Legacy job-timeout defaults remain accepted during migration
 
-- **GIVEN** an existing child caller and its rendered reusable-workflow
-  invocation are unchanged
-- **WHEN** the provider contract adds or changes a field that the caller
-  renderer does not consume
-- **THEN** the caller compatibility revision remains valid and the workflow
-  does not require child bootstrap
+- **GIVEN** an existing instance configuration contains
+  `llm.defaults.job_timeout_minutes`
+- **WHEN** the trusted resolver produces the current contract
+- **THEN** its `legacy_revision` equals the pre-change full-contract hash that
+  includes that timeout default, even though the effective current contract
+  omits it
 
-#### Scenario: A configured Bedrock default preserves existing callers
+#### Scenario: Bedrock model defaults do not alter the legacy hash
 
-- **GIVEN** an instance adds or changes a non-empty `llm.defaults.model`
-- **WHEN** the existing caller passes the organization model variable expression
-  and the reusable workflow resolves the instance default at runtime
-- **THEN** the caller compatibility revision remains valid and that caller
-  requires no regeneration
+- **GIVEN** an existing Bedrock caller predates Bedrock instance model
+  defaults
+- **WHEN** the instance later adds `llm.defaults.model`
+- **THEN** its `legacy_revision` still equals the pre-optionality full-contract
+  hash without the model default, and the existing caller passes the
+  compatibility gate without child bootstrap
 
-#### Scenario: A Bedrock-only runtime change does not churn other providers
+#### Scenario: Full-contract changes remain diagnostic-only for callers
 
-- **GIVEN** LiteLLM and OpenAI caller-visible contracts are unchanged
-- **WHEN** Bedrock-only runtime behavior changes
-- **THEN** their caller compatibility revisions remain valid
+- **GIVEN** a provider contract changes a runtime-only field that the renderer
+  does not consume
+- **WHEN** the trusted resolver produces the current contract
+- **THEN** `revision` changes as the full-contract fingerprint while
+  `caller_revision` remains unchanged
 
-#### Scenario: Required caller permission change rejects a stale caller
+#### Scenario: Legacy wire name carries the caller revision
 
-- **GIVEN** an existing child caller does not grant a newly required reusable-
-  workflow permission
-- **WHEN** the provider contract changes the caller permission rendered for
-  that workflow
-- **THEN** the caller compatibility revision changes and provider evaluation
-  fails before provider work with the exact child-bootstrap recovery command
+- **GIVEN** a generated child caller invokes a reusable provider workflow
+- **WHEN** the caller supplies its compatibility value
+- **THEN** it supplies the semantic `caller_revision` value through the
+  existing `configuration_revision` wire input, and the reusable workflow
+  accepts that input without requiring callers to rename it
+
+### Requirement: Provider workflows resolve effective configuration before preflight
+
+Each provider-specific reusable PR workflow SHALL resolve optional non-secret
+provider inputs through the validated contract before provider preflight and
+LLM work. It SHALL preserve raw caller inputs until resolution and SHALL expose
+only source labels in diagnostics. The workflow SHALL receive
+`job_timeout_minutes` as the organization variable expression from the caller;
+its job-level timeout SHALL apply the reusable-workflow fallback before any
+step runs. It SHALL NOT obtain that value from the fixed instance action or an
+instance-configured caller default. The configuration-action summary SHALL
+describe the fixed Action, instance-default, and workflow-default sources as
+applying to optional request-budget variables, and SHALL separately state that
+job timeout uses only the organization variable or reusable-workflow fallback.
+Generated organization profiles SHALL resolve through this same validated
+contract and SHALL not introduce a second default or provider-resolution path.
+Generated `panopticon.config.json` content SHALL contain only accepted
+instance-configuration fields. Computed provider and caller revisions SHALL be
+reported in generated review metadata rather than persisted in instance
+provider configuration.
+
+#### Scenario: Timeout fallback changes without caller regeneration
+
+- **GIVEN** an existing child caller passes only the organization timeout
+  variable expression
+- **WHEN** the reusable workflow's fallback changes
+- **THEN** the child caller remains compatible and uses the new fallback on its
+  next run without re-bootstrap
+
+#### Scenario: Configuration summary distinguishes timeout ownership
+
+- **WHEN** the provider configuration action summarizes optional variables
+- **THEN** it describes request-budget source precedence separately from
+  `job_timeout_minutes` and identifies the reusable workflow as the timeout
+  fallback owner
+
+#### Scenario: Generated profile uses the trusted default source
+
+- **WHEN** a generated profile declares an effective optional value and its
+  default source
+- **THEN** configuration validation resolves that value through the existing
+  provider contract before preflight and rejects an absent promised default
+
+#### Scenario: Generated configuration does not persist computed revisions
+
+- **WHEN** a generated profile resolves a provider contract
+- **THEN** its review manifest reports the computed revisions while its
+  `panopticon.config.json` remains valid for the existing configuration loader

@@ -574,7 +574,8 @@ repositories to inject arbitrary workflow steps.
    - instance token secret name;
    - model and request-budget variable names;
    - effective optional values and their default source;
-   - shared credential action reference used by the instance-owned wrapper;
+   - shared credential action reference (branch, tag, or full commit SHA) used
+     by the instance-owned wrapper;
    - region output contract;
    - reusable-workflow access policy;
    - per-child identity provisioning instructions and diagnostic URL;
@@ -595,7 +596,8 @@ repositories to inject arbitrary workflow steps.
    - a protected-path debt register.
 4. Keep runtime trust closed:
    - the provider registry still selects a template-owned workflow;
-   - the credential wrapper remains at the fixed reviewed path;
+   - the credential wrapper remains at the fixed reviewed path and is the only
+     place that may consume the validated shared action reference;
    - child configuration cannot select an arbitrary workflow or action;
    - generated callers continue mapping names explicitly and never use
      `secrets: inherit`.
@@ -738,7 +740,7 @@ The first reusable template targets the complexity class, not one organization:
 | Concern | Template behavior | Organization supplies |
 | --- | --- | --- |
 | Provider workflow | Selects a built-in trusted provider workflow | Provider choice |
-| Credentials | Uses direct OIDC or the fixed instance wrapper | Shared action reference or role settings |
+| Credentials | Uses direct OIDC or the fixed instance wrapper | Shared action reference (branch, tag, or full commit SHA) or role settings |
 | Secret indirection | Maps a validated Actions secret name | Secret name and value in organization settings |
 | Defaults | Records effective optionality and default source | Non-secret default source |
 | Child identity | Produces an ordered provisioning check | Organization-specific provisioning URL or command |
