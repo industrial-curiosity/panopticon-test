@@ -2,6 +2,18 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [assert-failure-path-diagnostics] - 2026-08-31
+
+### Added
+
+- Added a repository-wide contract requiring intentional failure-path tests to
+  assert their failure signal and actionable diagnostics.
+
+### Changed
+
+- Validation and merge failure-path tests now capture expected workflow
+  diagnostics so passing CI runs do not publish false error annotations.
+
 ## [add-instance-feature-packages] - 2026-08-31
 
 ### Added
