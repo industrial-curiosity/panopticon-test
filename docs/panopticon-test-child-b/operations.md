@@ -1,3 +1,7 @@
+---
+type: operations
+---
+
 # panopticon-test-child-b — operations
 
 <!-- panopticon-analysis-scope:start -->
@@ -17,22 +21,29 @@ Use `panopticon-ignore file` in one of a file's first five nonblank lines to exc
 
 ## Running locally
 
-Install the declared Node.js dependencies with `npm install`. Use `npm run build` to compile TypeScript with `tsc`, and `npm run worker` to start the SQS long-poll worker via `ts-node src/queue/worker.ts`.
+Install the declared Node.js dependencies with `npm install`. `npm run build` compiles the TypeScript modules into `dist/`; it does not create an application entry point because `src/index.ts` is absent. `npm run worker` starts the SQS long-poll worker after `ORDER_PROCESSING_QUEUE_URL`, AWS credentials, and the required region are configured.
 
-The `dev` script runs `ts-node src/index.ts` and `start` runs `node dist/index.js`, but `src/index.ts` does not exist in the repository, so the build produces no `dist/` and neither command can be verified from the checked-in source.
+The `npm run dev` and `npm start` scripts reference `src/index.ts` and `dist/index.js`, respectively. Those entry points are not committed, so these scripts cannot start the HTTP modules in this repository snapshot.
 
 ## Testing
 
-No test scripts or test suites are declared in `package.json`. TypeScript compilation via `npm run build` is the available repository-level verification command.
+No test files or `test` script are committed. Use `npm run build` as the available static TypeScript check after installing dependencies; success means the compiler exits with status 0.
 
 ## Deployment
 
-No deployment pipeline, environment promotion process, approval flow, or rollback procedure is present in the repository. The `infra/` YAML files declare interface-related resources only: the consumed services, the S3 bucket, and the SQS queue.
+This repository contains no deployment workflow or release configuration. Deployment of the HTTP routes, worker, Kafka topic, SQS queue, and S3 bucket must be provided by an external platform or repository.
 
 ## Required configuration
 
-Set `INVENTORY_API_URL`, `STRIPE_SECRET_KEY`, `SHIPPING_API_URL`, `ORDER_PROCESSING_QUEUE_URL`, and `ORDER_ATTACHMENTS_BUCKET` for the applicable clients. Set `KAFKA_BROKERS` to override its local default, and set `AWS_REGION` to override the default `us-east-1` used by SQS and S3. The configuration comes from environment variables supplied at runtime; no configuration files or secret references are committed.
+- `INVENTORY_API_URL` — base URL for inventory calls.
+- `SHIPPING_API_URL` — base URL for shipping calls.
+- `STRIPE_SECRET_KEY` — Stripe credential.
+- `KAFKA_BROKERS` — comma-separated Kafka brokers; defaults to `localhost:9092`.
+- `ORDER_PROCESSING_QUEUE_URL` — SQS queue URL.
+- `ORDER_ATTACHMENTS_BUCKET` — S3 bucket name.
+- `AWS_REGION` — AWS region; defaults to `us-east-1`.
+- AWS SDK credentials — supplied by the runtime environment's credential provider; values are not stored in this repository.
 
 ## Observability
 
-The worker writes startup, processing, and per-job failure messages to standard output or error. No metrics, dashboards, tracing, or alert definitions are visible in the repository.
+The worker writes startup, per-action, and processing-failure messages to stdout/stderr. The committed HTTP, Kafka, client, and S3 modules define no metrics, tracing, dashboards, or alert rules. Any runtime platform that captures process output is the only observability surface evidenced in this repository.

@@ -71,14 +71,14 @@ graph LR
     class repo_resource_orders_api_rest conflictResource
     repo_panopticon_test_child_b -.-> repo_resource_orders_api_rest
     repo_resource_orders_api_rest -.-> repo_panopticon_test_child_a
-    repo_resource_shipping_provider_api_rest["shipping-provider-api"]
-    repo_resource_shipping_provider_api_rest -.-> repo_panopticon_test_child_b
-    repo_resource_shipping_provider_api_webhook["shipping-provider-api"]
-    repo_panopticon_test_child_b -.-> repo_resource_shipping_provider_api_webhook
-    repo_resource_stripe_payments_rest["stripe-payments"]
-    repo_resource_stripe_payments_rest -.-> repo_panopticon_test_child_b
-    repo_resource_stripe_payments_webhook["stripe-payments"]
-    repo_panopticon_test_child_b -.-> repo_resource_stripe_payments_webhook
+    repo_resource_shipping_api_rest["shipping-api"]
+    repo_resource_shipping_api_rest -.-> repo_panopticon_test_child_b
+    repo_resource_shipping_webhook_webhook["shipping-webhook"]
+    repo_panopticon_test_child_b -.-> repo_resource_shipping_webhook_webhook
+    repo_resource_stripe_api_rest["stripe-api"]
+    repo_resource_stripe_api_rest -.-> repo_panopticon_test_child_b
+    repo_resource_stripe_webhook_webhook["stripe-webhook"]
+    repo_panopticon_test_child_b -.-> repo_resource_stripe_webhook_webhook
     classDef conflictResource fill:#fee2e2,stroke:#dc2626,color:#b91c1c,font-weight:bold
 ```
 
@@ -89,7 +89,7 @@ graph LR
 | interface | `order-events` | kafka | produces | [panopticon-test-child-a](panopticon-test-child-a/architecture.md) | consumer |
 | interface | `order-processing-queue` | sqs | produces/consumes | — | — |
 | interface | 🔴 **`orders-api`** | rest | produces | [panopticon-test-child-a](panopticon-test-child-a/architecture.md) | producer/consumer |
-| interface | `shipping-provider-api` | rest | consumes | — | — |
-| interface | `shipping-provider-api` | webhook | produces | — | — |
-| interface | `stripe-payments` | rest | consumes | — | — |
-| interface | `stripe-payments` | webhook | produces | — | — |
+| interface | `shipping-api` | rest | consumes | — | — |
+| interface | `shipping-webhook` | webhook | produces | — | — |
+| interface | `stripe-api` | rest | consumes | — | — |
+| interface | `stripe-webhook` | webhook | produces | — | — |
