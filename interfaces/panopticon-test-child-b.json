@@ -23,22 +23,20 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml",
               "src/storage/attachments.ts"
             ]
           }
         ],
         "extracted_by": "llm",
         "owner": {
-          "component": "storage",
+          "component": "attachment-storage",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml",
-              "src/storage/attachments.ts"
+              "infra/s3-buckets.yaml"
             ]
           }
         ],
@@ -48,8 +46,9 @@
     "order-events": [
       {
         "consumer": [],
+        "extracted_by": "llm",
         "owner": {
-          "component": "events",
+          "component": "order-event-publisher",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -70,7 +69,6 @@
           {
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml",
               "src/queue/processor.ts",
               "src/queue/worker.ts"
             ]
@@ -78,7 +76,7 @@
         ],
         "extracted_by": "llm",
         "owner": {
-          "component": "queue",
+          "component": "order-processing-worker",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -96,8 +94,9 @@
     "orders-api": [
       {
         "consumer": [],
+        "extracted_by": "llm",
         "owner": {
-          "component": "api",
+          "component": "orders-api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -112,7 +111,7 @@
         "type": "rest"
       }
     ],
-    "shipping-provider-api": [
+    "shipping-api": [
       {
         "consumer": [
           {
@@ -127,12 +126,14 @@
         "owner": null,
         "producer": [],
         "type": "rest"
-      },
+      }
+    ],
+    "shipping-webhook": [
       {
         "consumer": [],
         "extracted_by": "llm",
         "owner": {
-          "component": "api",
+          "component": "orders-api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -146,7 +147,7 @@
         "type": "webhook"
       }
     ],
-    "stripe-payments": [
+    "stripe-api": [
       {
         "consumer": [
           {
@@ -161,12 +162,14 @@
         "owner": null,
         "producer": [],
         "type": "rest"
-      },
+      }
+    ],
+    "stripe-webhook": [
       {
         "consumer": [],
         "extracted_by": "llm",
         "owner": {
-          "component": "api",
+          "component": "orders-api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [

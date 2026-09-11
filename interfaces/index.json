@@ -12,7 +12,7 @@
         {
           "claimed_by": "panopticon-test-child-b",
           "owner": {
-            "component": "api",
+            "component": "orders-api",
             "repo": "panopticon-test-child-b"
           }
         }
@@ -113,13 +113,12 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml",
               "src/storage/attachments.ts"
             ]
           }
         ],
         "owner": {
-          "component": "storage",
+          "component": "attachment-storage",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -127,8 +126,7 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/s3-buckets.yaml",
-              "src/storage/attachments.ts"
+              "infra/s3-buckets.yaml"
             ]
           }
         ],
@@ -146,11 +144,12 @@
           }
         ],
         "owner": {
-          "component": "events",
+          "component": "order-event-publisher",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
           {
+            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
               "src/events/kafka-topics.yaml",
@@ -184,14 +183,13 @@
             "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
-              "infra/sqs-queues.yaml",
               "src/queue/processor.ts",
               "src/queue/worker.ts"
             ]
           }
         ],
         "owner": {
-          "component": "queue",
+          "component": "order-processing-worker",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -228,6 +226,7 @@
             ]
           },
           {
+            "extracted_by": "llm",
             "repo": "panopticon-test-child-b",
             "source_files": [
               "src/api/openapi.yaml",
@@ -254,7 +253,7 @@
         "type": "postgres"
       }
     ],
-    "shipping-provider-api": [
+    "shipping-api": [
       {
         "consumer": [
           {
@@ -269,11 +268,13 @@
         "owner": null,
         "producer": [],
         "type": "rest"
-      },
+      }
+    ],
+    "shipping-webhook": [
       {
         "consumer": [],
         "owner": {
-          "component": "api",
+          "component": "orders-api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
@@ -288,7 +289,7 @@
         "type": "webhook"
       }
     ],
-    "stripe-payments": [
+    "stripe-api": [
       {
         "consumer": [
           {
@@ -303,11 +304,13 @@
         "owner": null,
         "producer": [],
         "type": "rest"
-      },
+      }
+    ],
+    "stripe-webhook": [
       {
         "consumer": [],
         "owner": {
-          "component": "api",
+          "component": "orders-api",
           "repo": "panopticon-test-child-b"
         },
         "producer": [
