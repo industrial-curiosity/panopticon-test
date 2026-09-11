@@ -2,6 +2,24 @@
 
 All notable changes to Panopticon are documented in this file.
 
+## [repair-child-feature-resume] - 2026-09-11
+
+### Changed
+
+- Child initialization now resumes advisory feature remediation using
+  child-installed artifacts without requiring a local feature registry.
+- Canonical template validation now parses all workflow YAML before contract
+  and Python checks, with actionable syntax errors in the job summary.
+
+## [add-template-sync-debugging] - 2026-09-08
+
+### Added
+
+- Template sync can now select a named template ref and summarizes the selected
+  ref and paths changed by the merge.
+- Provider doc-drift checks now emit opt-in, secret-safe planning and batch
+  progress diagnostics to step logs while reports remain outcome-focused.
+
 ## [batch-doc-drift-evaluation] - 2026-09-08
 
 ### Added
